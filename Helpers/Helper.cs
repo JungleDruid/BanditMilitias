@@ -291,6 +291,7 @@ namespace BanditMilitias
             }
 
             mobileParty.LeaderHero?.RemoveMilitiaHero();
+            mobileParty.Ai.DisableAi();
             var parties = PartiesWithoutPartyComponent(Campaign.Current.CampaignObjectManager).ToListQ();
             if (parties.Remove(mobileParty))
                 PartiesWithoutPartyComponent(Campaign.Current.CampaignObjectManager) = new MBReadOnlyList<MobileParty>(parties);
