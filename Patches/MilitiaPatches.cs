@@ -39,8 +39,8 @@ namespace BanditMilitias.Patches
 {
     internal static class MilitiaPatches
     {
-        private static readonly AccessTools.FieldRef<MobileParty, int> numberOfRecentFleeingFromAParty =
-            AccessTools.FieldRefAccess<MobileParty, int>("_numberOfRecentFleeingFromAParty");
+        private static readonly AccessTools.FieldRef<MobilePartyAi, int> numberOfRecentFleeingFromAParty =
+            AccessTools.FieldRefAccess<MobilePartyAi, int>("_numberOfRecentFleeingFromAParty");
 
         [HarmonyPatch(typeof(MobileParty), "CalculateSpeed")]
         public static class MobilePartyCalculateSpeed
@@ -164,12 +164,12 @@ namespace BanditMilitias.Patches
         }
 
         // prevent militias from attacking parties they can destroy easily
-        [HarmonyPatch(typeof(MobileParty), "CanAttack")]
+        [HarmonyPatch(typeof(MobilePartyAi), "CanAttack")]
         public static class MobilePartyCanAttackPatch
         {
-            public static void Postfix(MobileParty __instance, MobileParty targetParty, ref bool __result)
+            public static void Postfix(MobileParty targetParty, MobileParty ____mobileParty, ref bool __result)
             {
-                if (__result && targetParty.Party.IsMobile && __instance.IsBM())
+                if (__result && targetParty.Party.IsMobile && ____mobileParty.IsBM())
                 {
                     if (Globals.Settings.IgnoreVillagersCaravans
                         && (targetParty.IsCaravan || targetParty.IsVillager))
@@ -179,14 +179,14 @@ namespace BanditMilitias.Patches
                     }
 
                     if (targetParty.LeaderHero is not null
-                        && __instance.GetBM().Avoidance.TryGetValue(targetParty.LeaderHero, out var heroAvoidance)
+                        && ____mobileParty.GetBM().Avoidance.TryGetValue(targetParty.LeaderHero, out var heroAvoidance)
                         && Rng.NextDouble() * 100 < heroAvoidance)
                     {
                         __result = false;
                         return;
                     }
 
-                    var party1Strength = __instance.GetTotalStrengthWithFollowers();
+                    var party1Strength = ____mobileParty.GetTotalStrengthWithFollowers();
                     var party2Strength = targetParty.GetTotalStrengthWithFollowers();
                     float delta;
                     if (party1Strength > party2Strength)
@@ -294,22 +294,22 @@ namespace BanditMilitias.Patches
         }
 
         // copied from 1.9 assembly since there is no BanditPartyComponent in BMs
-        [HarmonyPatch(typeof(MobileParty), "CalculateContinueChasingScore")]
+        [HarmonyPatch(typeof(MobilePartyAi), "CalculateContinueChasingScore")]
         public class MobilePartyCalculateContinueChasingScore
         {
-            public static bool Prefix(MobileParty __instance, MobileParty enemyParty, ref float __result)
+            public static bool Prefix(MobileParty enemyParty, MobileParty ____mobileParty, ref float __result)
             {
-                if (!__instance.IsBM())
+                if (!____mobileParty.IsBM())
                     return true;
-                var num = __instance.Army != null && __instance.Army.LeaderParty == __instance ? __instance.Army.TotalStrength : __instance.Party.TotalStrength;
-                var num2 = (enemyParty.Army != null && enemyParty.Army.LeaderParty == __instance ? enemyParty.Army.TotalStrength : enemyParty.Party.TotalStrength) / (num + 0.01f);
-                var num3 = 1f + 0.01f * numberOfRecentFleeingFromAParty(enemyParty);
-                var num4 = Math.Min(1f, (__instance.Position2D - enemyParty.Position2D).Length / 3f);
-                var settlement = __instance.GetBM().HomeSettlement;
+                var num = ____mobileParty.Army != null && ____mobileParty.Army.LeaderParty == ____mobileParty ? ____mobileParty.Army.TotalStrength : ____mobileParty.Party.TotalStrength;
+                var num2 = (enemyParty.Army != null && enemyParty.Army.LeaderParty == ____mobileParty ? enemyParty.Army.TotalStrength : enemyParty.Party.TotalStrength) / (num + 0.01f);
+                var num3 = 1f + 0.01f * numberOfRecentFleeingFromAParty(enemyParty.Ai);
+                var num4 = Math.Min(1f, (____mobileParty.Position2D - enemyParty.Position2D).Length / 3f);
+                var settlement = ____mobileParty.GetBM().HomeSettlement;
                 var num5 = Campaign.AverageDistanceBetweenTwoFortifications * 3f;
-                num5 = Campaign.Current.Models.MapDistanceModel.GetDistance(__instance, settlement);
+                num5 = Campaign.Current.Models.MapDistanceModel.GetDistance(____mobileParty, settlement);
                 var num6 = num5 / (Campaign.AverageDistanceBetweenTwoFortifications * 3f);
-                var input = 1f + (float)Math.Pow(enemyParty.Speed / (__instance.Speed - 0.25f), 3.0);
+                var input = 1f + (float)Math.Pow(enemyParty.Speed / (____mobileParty.Speed - 0.25f), 3.0);
                 input = MBMath.Map(input, 0f, 5.2f, 0f, 2f);
                 var num7 = 60000f;
                 var num8 = 10000f;
@@ -433,16 +433,16 @@ namespace BanditMilitias.Patches
         }
 
         // game seems to dislike me removing parties on tick 3.9
-        [HarmonyPatch(typeof(MobileParty), "GetFollowBehavior")]
+        [HarmonyPatch(typeof(MobilePartyAi), "GetFollowBehavior")]
         public static class MobilePartyGetFollowBehavior
         {
-            public static bool Prefix(MobileParty __instance, MobileParty followedParty)
+            public static bool Prefix(MobileParty followedParty, MobileParty ____mobileParty)
             {
-                if (__instance.Army == null &&
+                if (____mobileParty.Army == null &&
                     followedParty is null)
                 {
-                    __instance.Ai.DisableForHours(1);
-                    __instance.Ai.RethinkAtNextHourlyTick = true;
+                    ____mobileParty.Ai.DisableForHours(1);
+                    ____mobileParty.Ai.RethinkAtNextHourlyTick = true;
                     return false;
                 }
 

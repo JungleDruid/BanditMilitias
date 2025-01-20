@@ -43,12 +43,12 @@ namespace BanditMilitias
             CampaignEvents.RaidCompletedEvent.AddNonSerializedListener(this, (_, m) =>
             {
                 if (Globals.Settings.ShowRaids
-                    && m.PartiesOnSide(BattleSideEnum.Attacker)
+                    && m.AttackerSide.Parties
                         .AnyQ(mep => mep.Party.IsMobile && mep.Party.MobileParty.IsBM()))
                 {
                     InformationManager.DisplayMessage(
                         new InformationMessage($"{m.MapEventSettlement?.Name} raided!  " +
-                                               $"{m.PartiesOnSide(BattleSideEnum.Attacker).First().Party.Name} is fat with loot near {SettlementHelper.FindNearestTown().Name}!"));
+                                               $"{m.AttackerSide.Parties.First().Party.Name} is fat with loot near {SettlementHelper.FindNearestTown().Name}!"));
                 }
             });
 
@@ -108,8 +108,8 @@ namespace BanditMilitias
             if (mobileParty.PartyComponent is BanditPartyComponent)
             {
                 if ((mobileParty.CurrentSettlement is not null
-                     && mobileParty.AiBehaviorMapEntity is Settlement { IsHideout: true })
-                    || mobileParty.AiBehaviorMapEntity is MobileParty { IsCaravan: true })
+                     && mobileParty.Ai.AiBehaviorMapEntity is Settlement { IsHideout: true })
+                    || mobileParty.Ai.AiBehaviorMapEntity is MobileParty { IsCaravan: true })
                     return;
             }
 
@@ -117,11 +117,17 @@ namespace BanditMilitias
                 return;
 
             // near any Hideouts?
-            if (mobileParty.IsBM()
-                && Settlement.FindSettlementsAroundPosition(mobileParty.Position2D, MinDistanceFromHideout, s => s.IsHideout).Any())
+            if (mobileParty.IsBM())
             {
-                BMThink(mobileParty);
-                return;
+                var locatableSearchData = Settlement.StartFindingLocatablesAroundPosition(mobileParty.Position2D, MinDistanceFromHideout);
+                for (Settlement settlement =
+                         Settlement.FindNextLocatable(ref locatableSearchData); settlement != null; settlement =
+                         Settlement.FindNextLocatable(ref locatableSearchData))
+                {
+                    if (!settlement.IsHideout) continue;
+                    BMThink(mobileParty);
+                    return;
+                }
             }
 
             // BM changed too recently?
@@ -132,20 +138,31 @@ namespace BanditMilitias
                 return;
             }
 
-            var nearbyBandits = MobileParty.FindPartiesAroundPosition(mobileParty.Position2D, FindRadius).WhereQ(m =>
-                m.IsBandit
-                && m.MapEvent is null
-                && m.MemberRoster.TotalManCount > Globals.Settings.MergeableSize
-                && m.MemberRoster.TotalManCount + mobileParty.MemberRoster.TotalManCount >= Globals.Settings.MinPartySize
-                && IsAvailableBanditParty(m)).ToListQ();
-            nearbyBandits.Remove(mobileParty);
-            if (!nearbyBandits.Any())
+            List<MobileParty> nearbyBandits = [];
+            {
+                var locatableSearchData = MobileParty.StartFindingLocatablesAroundPosition(mobileParty.Position2D, FindRadius);
+                for (MobileParty party =
+                         MobileParty.FindNextLocatable(ref locatableSearchData); party != null; party =
+                         MobileParty.FindNextLocatable(ref locatableSearchData))
+                {
+                    if (party == mobileParty) continue;
+                    if (party.IsBandit && party.MapEvent is null &&
+                        mobileParty.MemberRoster.TotalManCount > Globals.Settings.MergeableSize &&
+                        mobileParty.MemberRoster.TotalManCount + mobileParty.MemberRoster.TotalManCount >= Globals.Settings.MinPartySize &&
+                        IsAvailableBanditParty(party))
+                    {
+                        nearbyBandits.Add(party);
+                    }
+                }
+            }
+            
+            if (nearbyBandits.Count == 0)
             {
                 BMThink(mobileParty);
                 return;
             }
 
-            MobileParty mergeTarget = default;
+            MobileParty mergeTarget = null;
             foreach (var target in nearbyBandits.OrderByQ(m => m.Position2D.Distance(mobileParty.Position2D)))
             {
                 var militiaTotalCount = mobileParty.MemberRoster.TotalManCount + target.MemberRoster.TotalManCount;
@@ -176,8 +193,8 @@ namespace BanditMilitias
                 && mobileParty.TargetParty != mergeTarget)
             {
                 //Log.Debug?.Log($"{new string('>', 100mobileParty.SetMoveEscortParty(mergeTarget);)} MOVING {mobileParty.StringId,20} {mergeTarget.StringId,20}");
-                mobileParty.SetMoveEscortParty(mergeTarget);
-                mergeTarget.SetMoveEscortParty(mobileParty);
+                mobileParty.Ai.SetMoveEscortParty(mergeTarget);
+                mergeTarget.Ai.SetMoveEscortParty(mobileParty);
                 return;
             }
 
@@ -217,7 +234,7 @@ namespace BanditMilitias
                 bm.Position2D = party.Position2D;
             }
 
-            bm.Party.Visuals.SetMapIconAsDirty();
+            bm.Party.SetVisualAsDirty();
             try
             {
                 // can throw if Clan is null (doesn't happen in 3.9 apparently)
@@ -235,18 +252,18 @@ namespace BanditMilitias
         internal static void BMThink(MobileParty mobileParty)
         {
             Settlement target;
-            switch (mobileParty.Ai.AiState)
+            switch (mobileParty.Ai.DefaultBehavior)
             {
-                case AIState.Undefined:
-                case AIState.PatrollingAroundLocation when mobileParty.DefaultBehavior is AiBehavior.Hold or AiBehavior.None:
+                case AiBehavior.None:
+                case AiBehavior.Hold:
                     if (mobileParty.TargetSettlement is null)
                     {
                         target = Settlement.All.WhereQ(s => s.Position2D.Distance(mobileParty.Position2D) < settlementFindRange).GetRandomElementInefficiently();
-                        mobileParty.SetMovePatrolAroundSettlement(target);
+                        mobileParty.Ai.SetMovePatrolAroundSettlement(target);
                     }
 
                     break;
-                case AIState.PatrollingAroundLocation:
+                case AiBehavior.PatrolAroundPoint:
                     // PILLAGE!
                     if (Globals.Settings.AllowPillaging
                         && mobileParty.LeaderHero is not null
@@ -282,7 +299,7 @@ namespace BanditMilitias
                             InformationManager.DisplayMessage(new InformationMessage($"{mobileParty.Name} is raiding your village {target.Name} near {target.Town?.Name}!"));
 
                         //Log.Debug?.Log($"{new string('=', 100)} {target.Village.VillageState}");
-                        mobileParty.SetMoveRaidSettlement(target);
+                        mobileParty.Ai.SetMoveRaidSettlement(target);
                     }
 
                     break;

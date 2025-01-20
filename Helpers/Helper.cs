@@ -40,8 +40,8 @@ namespace BanditMilitias
         internal static readonly AccessTools.FieldRef<MobileParty, bool> IsBandit =
             AccessTools.FieldRefAccess<MobileParty, bool>("<IsBandit>k__BackingField");
 
-        internal static readonly AccessTools.FieldRef<NameGenerator, TextObject[]> GangLeaderNames =
-            AccessTools.FieldRefAccess<NameGenerator, TextObject[]>("_gangLeaderNames");
+        internal static readonly AccessTools.FieldRef<NameGenerator, MBList<TextObject>> GangLeaderNames =
+            AccessTools.FieldRefAccess<NameGenerator, MBList<TextObject>>("_gangLeaderNames");
 
         private static readonly AccessTools.StructFieldRef<EquipmentElement, ItemModifier> ItemModifier =
             AccessTools.StructFieldRefAccess<EquipmentElement, ItemModifier>("<ItemModifier>k__BackingField");
@@ -57,7 +57,7 @@ namespace BanditMilitias
             AccessTools.FieldRefAccess<CharacterObject, bool>("<HiddenInEncylopedia>k__BackingField");
 
         private static readonly AccessTools.FieldRef<CampaignObjectManager, MBReadOnlyList<MobileParty>> PartiesWithoutPartyComponent =
-            AccessTools.FieldRefAccess<CampaignObjectManager, MBReadOnlyList<MobileParty>>("<PartiesWithoutPartyComponent>k__BackingField");
+            AccessTools.FieldRefAccess<CampaignObjectManager, MBReadOnlyList<MobileParty>>("_partiesWithoutPartyComponent");
 
         private static readonly AccessTools.FieldRef<MobileParty, Clan> actualClan =
             AccessTools.FieldRefAccess<MobileParty, Clan>("_actualClan");
@@ -201,8 +201,8 @@ namespace BanditMilitias
                 Log.Debug?.Log($">>> {bm1.Name} <- Split {original.Name} Split -> {bm2.Name}");
                 ItemRoster(bm1.Party) = inventory1;
                 ItemRoster(bm2.Party) = inventory2;
-                bm1.Party.Visuals.SetMapIconAsDirty();
-                bm2.Party.Visuals.SetMapIconAsDirty();
+                bm1.Party.SetVisualAsDirty();
+                bm2.Party.SetVisualAsDirty();
                 Trash(original);
                 DoPowerCalculations();
             }
@@ -628,11 +628,14 @@ namespace BanditMilitias
         internal static CultureObject GetMostPrevalentFromNearbySettlements(Vec2 position)
         {
             const int arbitraryDistance = 100;
-            var settlements = Settlement.FindSettlementsAroundPosition(position, arbitraryDistance, s => !s.IsHideout);
+            var locatableSearchData = Settlement.StartFindingLocatablesAroundPosition(position, arbitraryDistance);
             var map = new Dictionary<CultureObject, int>();
-            foreach (var settlement in settlements)
+            for (var settlement = Settlement.FindNextLocatable(ref locatableSearchData);
+                 settlement != null;
+                 settlement = Settlement.FindNextLocatable(ref locatableSearchData))
             {
-                if (map.TryGetValue(settlement.Culture, out _))
+                if (settlement.IsHideout) continue;
+                if (map.ContainsKey(settlement.Culture))
                 {
                     map[settlement.Culture]++;
                 }
@@ -782,7 +785,7 @@ namespace BanditMilitias
             mobileParty.SetCustomName(mobileParty.GetBM().Name);
             if (Globals.Settings.Trackers && mobileParty.MemberRoster.TotalManCount >= Globals.Settings.TrackedSizeMinimum)
             {
-                var tracker = new MobilePartyTrackItemVM(mobileParty, MapScreen.Instance.MapCamera, null);
+                var tracker = new MobilePartyTrackItemVM(mobileParty, MapScreen.Instance._mapCameraView.Camera, null);
                 Globals.MapMobilePartyTrackerVM.Trackers.Add(tracker);
             }
         }

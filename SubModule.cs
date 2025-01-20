@@ -96,7 +96,7 @@ namespace BanditMilitias
             // debug to show all parties on map
             if (MEOWMEOW && superKey && Input.IsKeyPressed(InputKey.F9))
                 foreach (var m in MobileParty.All)
-                    Globals.MapMobilePartyTrackerVM.Trackers.Add(new MobilePartyTrackItemVM(m, MapScreen.Instance.MapCamera, null));
+                    Globals.MapMobilePartyTrackerVM.Trackers.Add(new MobilePartyTrackItemVM(m, MapScreen.Instance._mapCameraView.Camera, null));
 
             if (MEOWMEOW && Input.IsKeyPressed(InputKey.F1))
             {

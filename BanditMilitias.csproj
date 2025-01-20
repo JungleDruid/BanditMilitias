@@ -12,13 +12,13 @@
     <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
         <PlatformTarget>x64</PlatformTarget>
         <DebugType>full</DebugType>
-        <OutputPath>$(BaseOutputPath)</OutputPath>
+        <OutputPath>$(BANNERLORD_GAME_DIR)/Modules/BanditMilitias/bin/Win64_Shipping_Client/</OutputPath>
     </PropertyGroup>
 
     <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
         <PlatformTarget>x64</PlatformTarget>
         <DebugSymbols>true</DebugSymbols>
-        <OutputPath>$(BaseOutputPath)</OutputPath>
+        <OutputPath>$(BANNERLORD_GAME_DIR)/Modules/BanditMilitias/bin/Win64_Shipping_Client/</OutputPath>
     </PropertyGroup>
 
     <ItemGroup>
@@ -45,24 +45,25 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="Bannerlord.ButterLib" Version="2.3.1">
+        <PackageReference Include="Bannerlord.ButterLib" Version="2.9.18">
             <PrivateAssets>all</PrivateAssets>
             <ExcludeAssets>runtime</ExcludeAssets>
             <IncludeAssets>compile; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
-        <PackageReference Include="Bannerlord.MCM" Version="5.0.0">
+        <PackageReference Include="Bannerlord.MCM" Version="5.10.2">
             <PrivateAssets>all</PrivateAssets>
             <ExcludeAssets>runtime</ExcludeAssets>
             <IncludeAssets>compile; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
-        <PackageReference Include="Bannerlord.UIExtenderEx" Version="2.3.0">
+        <PackageReference Include="Bannerlord.UIExtenderEx" Version="2.12.0">
             <PrivateAssets>all</PrivateAssets>
             <ExcludeAssets>runtime</ExcludeAssets>
             <IncludeAssets>compile; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
-        <PackageReference Include="Lib.Harmony" Version="2.2.2">
+        <PackageReference Include="Lib.Harmony" Version="2.3.3">
             <PrivateAssets>all</PrivateAssets>
             <ExcludeAssets>runtime</ExcludeAssets>
+            <IncludeAssets>compile; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
     </ItemGroup>
 
@@ -80,6 +81,6 @@
     </ItemGroup>
 
     <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-      <Exec Command="xcopy /e /y $(ProjectDir)ModuleData\ &quot;M:\SteamLibrary\steamapps\common\Mount &amp; Blade II Bannerlord\Modules\BanditMilitias\ModuleData&quot;" />
+      <Exec Command="xcopy /e /y $(ProjectDir)ModuleData\ &quot;$(BANNERLORD_GAME_DIR)\Modules\BanditMilitias\ModuleData&quot;" />
     </Target>
 </Project>
