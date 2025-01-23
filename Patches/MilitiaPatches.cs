@@ -268,7 +268,8 @@ namespace BanditMilitias.Patches
                 textObject.SetTextVariable("IMPERIAL", hero.Culture.StringId == "empire" ? 1 : 0);
                 textObject.SetTextVariable("COASTAL", hero.Culture.StringId is "empire" or "vlandia" ? 1 : 0);
                 textObject.SetTextVariable("NORTHERN", hero.Culture.StringId is "battania" or "sturgia" ? 1 : 0);
-                StringHelpers.SetCharacterProperties("HERO", hero.CharacterObject, textObject).SetTextVariable("FIRSTNAME", heroFirstName);
+                textObject.SetTextVariable("FIRSTNAME", heroFirstName);
+                StringHelpers.SetCharacterProperties("HERO", hero.CharacterObject, textObject);
                 __result = textObject;
             }
         }
