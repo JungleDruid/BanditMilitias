@@ -80,7 +80,11 @@
         <EmbeddedResource Remove="bin\**" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Folder Include="_Module\" />
+    </ItemGroup>
+
     <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-      <Exec Command="xcopy /e /y $(ProjectDir)ModuleData\ &quot;$(BANNERLORD_GAME_DIR)\Modules\BanditMilitias\ModuleData&quot;" />
+      <Exec Command="xcopy /e /y $(ProjectDir)_Module\ &quot;$(BANNERLORD_GAME_DIR)\Modules\BanditMilitias&quot;" />
     </Target>
 </Project>

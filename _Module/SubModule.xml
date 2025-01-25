@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Module>
+  <Name value="BanditMilitias" />
+  <Id value="BanditMilitias" />
+  <Version value="v1.2.12.3" />
+  <Official value="false" />
+  <DefaultModule value="false" />
+  <SingleplayerModule value="true" />
+  <MultiplayerModule value="false" />
+  <DependedModules>
+    <DependedModule Id="Native"/>
+    <DependedModule Id="SandBoxCore"/>
+    <DependedModule Id="Sandbox"/>
+    <DependedModule Id="CustomBattle"/>
+    <DependedModule Id="StoryMode"/>
+    <DependedModule Id="Bannerlord.ButterLib"/>
+    <DependedModule Id="Bannerlord.MBOptionScreen"/>
+  </DependedModules>
+  <SubModules>
+    <SubModule>
+      <Name value="BanditMilitias" />
+      <DLLName value="BanditMilitias.dll" />
+      <SubModuleClassType value="BanditMilitias.SubModule" />
+      <Tags />
+    </SubModule>
+  </SubModules>
+  <Xmls>
+    <XmlNode>
+      <XmlName id="NPCCharacters" path="lords"/>
+      <IncludedGameTypes>
+        <GameType value = "Campaign"/>
+        <GameType value = "CampaignStoryMode"/>
+      </IncludedGameTypes>
+    </XmlNode>
+  </Xmls>
+</Module>
