@@ -22,6 +22,7 @@ namespace BanditMilitias
             ItemTypes = new();
             Recruits = new();
             EquipmentItems = new();
+            BanditEquipment = new();
             Arrows = new();
             Bolts = new();
             LastCalculated = 0;

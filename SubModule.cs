@@ -16,7 +16,6 @@ using TaleWorlds.Library;
 using TaleWorlds.LinQuick;
 using TaleWorlds.MountAndBlade;
 using TaleWorlds.ObjectSystem;
-using TaleWorlds.ScreenSystem;
 using static BanditMilitias.Helper;
 using static BanditMilitias.Globals;
 using Debug = System.Diagnostics.Debug;

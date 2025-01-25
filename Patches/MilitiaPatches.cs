@@ -53,6 +53,20 @@ namespace BanditMilitias.Patches
             }
         }
 
+        // Merge bandit parties when they are engaged with each other
+        [HarmonyPatch(typeof(EncounterManager), nameof(EncounterManager.StartPartyEncounter))]
+        public static class MobilePartyOnPartyInteraction
+        {
+            public static bool Prefix(PartyBase attackerParty, PartyBase defenderParty)
+            {
+                if (attackerParty?.MobileParty?.IsBandit != true || defenderParty?.MobileParty?.IsBandit != true ||
+                    FactionManager.IsAtWarAgainstFaction(attackerParty.MapFaction, defenderParty.MapFaction))
+                    return true;
+                TryMergeParties(attackerParty.MobileParty, defenderParty.MobileParty);
+                return false;
+            }
+        }
+
         // changes the flag
         [HarmonyPatch(typeof(PartyVisual), "AddCharacterToPartyIcon")]
         public static class PartyVisualAddCharacterToPartyIconPatch
@@ -153,13 +167,46 @@ namespace BanditMilitias.Patches
         {
             public static bool Prefix(PartyBase ____encounteredParty)
             {
-                if (____encounteredParty.MobileParty.IsBM())
+                if (Globals.Settings.SkipConversations && ____encounteredParty.MobileParty.IsBM())
                 {
                     GameMenu.SwitchToMenu("encounter");
                     return false;
                 }
 
                 return true;
+            }
+        }
+
+        // prevent bandit militia leaders from being identified as lords
+        [HarmonyPatch(typeof(LordConversationsCampaignBehavior),
+            "conversation_lord_greets_under_24_hours_on_condition")]
+        public static class LordConversationsCampaignBehavior_conversation_lord_greets_under_24_hours_on_condition_Patch
+        {
+            public static bool Prefix(LordConversationsCampaignBehavior __instance, ref bool __result)
+            {
+                if (PlayerEncounter.EncounteredMobileParty.IsBM())
+                {
+                    __result = false;
+                    return false;
+                }
+
+                return true;
+            }
+        }
+
+        [HarmonyPatch(typeof(DefaultVoiceOverModel), nameof(DefaultVoiceOverModel.GetSoundPathForCharacter))]
+        public static class DefaultVoiceOverModelGetSoundPathForCharacterPatch
+        {
+            public static void Postfix(CharacterObject character, VoiceObject voiceObject, ref string __result)
+            {
+                if (!Globals.Settings.CheckVoiceGender)
+                    return;
+                
+                if (character.IsBM() && character.IsFemale)
+                {
+                    if (!__result.Contains("_female"))
+                        __result = "";
+                }
             }
         }
 
@@ -457,6 +504,13 @@ namespace BanditMilitias.Patches
         {
             public static bool Prefix(MobileParty __instance, ref float __result)
             {
+                if (__instance.Party == null)
+                {
+                    __result = 1f;
+                    Log.Debug?.Log($"[Warning] MobilePartyGetTotalStrengthWithFollowers: {__instance.Name}({__instance.StringId}) does not have a Party.");
+                    return false;
+                }
+                
                 if (!__instance.IsBandit
                     && __instance.Party.MobileParty.TargetParty == null
                     && __instance.Party.MobileParty.ShortTermBehavior is AiBehavior.EngageParty)
@@ -485,6 +539,17 @@ namespace BanditMilitias.Patches
         public class ChangeRelationActionApplyInternal
         {
             public static Exception Finalizer() => null;
+        }
+
+        // bandit heroes' home settlements will be their born settlements if there is none
+        [HarmonyPatch(typeof(Hero), nameof(Hero.UpdateHomeSettlement))]
+        public class HeroUpdateHomeSettlement
+        {
+            public static void Postfix(Hero __instance, ref Settlement ____homeSettlement, Settlement ____bornSettlement)
+            {
+                if (____homeSettlement is not null || ____bornSettlement is null || __instance.Clan?.IsBanditFaction != true) return;
+                ____homeSettlement = ____bornSettlement;
+            }
         }
     }
 }

@@ -16,7 +16,6 @@ using TaleWorlds.CampaignSystem.Extensions;
 using TaleWorlds.CampaignSystem.GameMenus;
 using TaleWorlds.CampaignSystem.MapEvents;
 using TaleWorlds.CampaignSystem.Party;
-using TaleWorlds.CampaignSystem.Party.PartyComponents;
 using TaleWorlds.CampaignSystem.Roster;
 using TaleWorlds.CampaignSystem.Settlements;
 using TaleWorlds.Core;
@@ -24,6 +23,7 @@ using TaleWorlds.Library;
 using TaleWorlds.LinQuick;
 using TaleWorlds.Localization;
 using TaleWorlds.ModuleManager;
+using TaleWorlds.MountAndBlade;
 using TaleWorlds.ObjectSystem;
 using static BanditMilitias.Globals;
 
@@ -64,9 +64,6 @@ namespace BanditMilitias
 
         internal static readonly AccessTools.FieldRef<MBObjectBase, bool> IsRegistered =
             AccessTools.FieldRefAccess<MBObjectBase, bool>("<IsRegistered>k__BackingField");
-
-        private static readonly AccessTools.StructFieldRef<BodyProperties, StaticBodyProperties> StaticBodyProps =
-            AccessTools.StructFieldRefAccess<BodyProperties, StaticBodyProperties>("_staticBodyProperties");
 
         private static PartyUpgraderCampaignBehavior UpgraderCampaignBehavior;
 
@@ -180,10 +177,10 @@ namespace BanditMilitias
                     party2.AddToCounts(troop, 1);
                 }
 
-                if (original.ActualClan is null) Meow();
+                if (original.HomeSettlement is null) Meow();
 
-                var bm1 = MobileParty.CreateParty("Bandit_Militia", new ModBanditMilitiaPartyComponent(original.ActualClan), m => m.ActualClan = original.ActualClan);
-                var bm2 = MobileParty.CreateParty("Bandit_Militia", new ModBanditMilitiaPartyComponent(original.ActualClan), m => m.ActualClan = original.ActualClan);
+                var bm1 = MobileParty.CreateParty("Bandit_Militia", new ModBanditMilitiaPartyComponent(original.HomeSettlement, original.LeaderHero), m => m.ActualClan = original.ActualClan);
+                var bm2 = MobileParty.CreateParty("Bandit_Militia", new ModBanditMilitiaPartyComponent(original.HomeSettlement, null), m => m.ActualClan = original.ActualClan);
                 var rosters1 = new[]
                 {
                     party1,
@@ -203,7 +200,7 @@ namespace BanditMilitias
                 ItemRoster(bm2.Party) = inventory2;
                 bm1.Party.SetVisualAsDirty();
                 bm2.Party.SetVisualAsDirty();
-                Trash(original);
+                Trash(original, false);
                 DoPowerCalculations();
             }
             catch (Exception ex)
@@ -237,6 +234,83 @@ namespace BanditMilitias
                    && !__instance.IsTooBusyToMerge()
                    && !__instance.IsUsedByAQuest()
                    && !verbotenParties.Contains(__instance.StringId);
+        }
+
+        private static bool CanMergeNow(MobileParty __instance)
+        {
+            return __instance.MapEvent is null
+                   && __instance.Party.MemberRoster.TotalManCount > 0
+                   && !__instance.IsUsedByAQuest();
+        }
+
+        internal static bool TryMergeParties(MobileParty mobileParty, MobileParty mergeTarget)
+        {
+            if (mobileParty is null || mergeTarget is null || !CanMergeNow(mobileParty) || !CanMergeNow(mergeTarget))
+            {
+                return false;
+            }
+            
+            //Log.Debug?.Log($"{new string('=', 100)} MERGING {mobileParty.StringId,20} {mergeTarget.StringId,20}");
+            // create a new party merged from the two
+            var rosters = MergeRosters(mobileParty, mergeTarget);
+            Hero leaderHero = (mobileParty.LeaderHero?.Power ?? 0) >= (mergeTarget?.LeaderHero?.Power ?? 0) ? mobileParty.LeaderHero : mergeTarget.LeaderHero;
+            Settlement mobilePartyHomeSettlement = mobileParty.HomeSettlement?.IsHideout ?? false ? mobileParty.HomeSettlement : null;
+            Settlement mergeTargetHomeSettlement = mergeTarget.HomeSettlement?.IsHideout ?? false ? mergeTarget.HomeSettlement : null;
+            Settlement bestSettlement = leaderHero?.HomeSettlement ?? (mobileParty.Party.TotalStrength > mergeTarget.Party.TotalStrength ? mobilePartyHomeSettlement ?? mergeTargetHomeSettlement : mergeTargetHomeSettlement ?? mobilePartyHomeSettlement);
+            if (bestSettlement is null)
+            {
+                bestSettlement = Hideouts.OrderByQ(s => s.Position2D.Distance(mobileParty.Position2D)).First();
+                if (leaderHero is not null) System.Diagnostics.Debugger.Break();
+            }
+            
+            var bm = MobileParty.CreateParty("Bandit_Militia", new ModBanditMilitiaPartyComponent(bestSettlement, leaderHero), m => m.ActualClan = bestSettlement.OwnerClan);
+            InitMilitia(bm, rosters, mobileParty.Position2D);
+            // each BM gets the average of Avoidance values
+            var calculatedAvoidance = new Dictionary<Hero, float>();
+
+            void CalcAverageAvoidance(ModBanditMilitiaPartyComponent BM)
+            {
+                foreach (var entry in BM.Avoidance)
+                    if (!calculatedAvoidance.TryGetValue(entry.Key, out _))
+                        calculatedAvoidance.Add(entry.Key, entry.Value);
+                    else
+                    {
+                        calculatedAvoidance[entry.Key] += entry.Value;
+                        calculatedAvoidance[entry.Key] /= 2;
+                    }
+            }
+
+            if (mobileParty.PartyComponent is ModBanditMilitiaPartyComponent BM1)
+                CalcAverageAvoidance(BM1);
+
+            if (mergeTarget.PartyComponent is ModBanditMilitiaPartyComponent BM2)
+                CalcAverageAvoidance(BM2);
+
+            bm.GetBM().Avoidance = calculatedAvoidance;
+            // teleport new militias near the player
+            if (Globals.Settings.TestingMode)
+            {
+                // in case a prisoner
+                var party = Hero.MainHero.PartyBelongedTo ?? Hero.MainHero.PartyBelongedToAsPrisoner.MobileParty;
+                bm.Position2D = party.Position2D;
+            }
+
+            bm.Party.SetVisualAsDirty();
+            Log.Debug?.Log($"[Info] {bm.Name}({bm.StringId}) is merged from {mobileParty.Name}({mobileParty.StringId}) and {mergeTarget.Name}({mergeTarget.StringId})");
+            try
+            {
+                // can throw if Clan is null (doesn't happen in 3.9 apparently)
+                Trash(mobileParty, bm.LeaderHero != mobileParty.LeaderHero);
+                Trash(mergeTarget, bm.LeaderHero != mergeTarget.LeaderHero);
+            }
+            catch (Exception ex)
+            {
+                Log.Debug?.Log(ex);
+            }
+
+            DoPowerCalculations();
+
+            return true;
         }
 
         internal static TroopRoster[] MergeRosters(MobileParty sourceParty, MobileParty targetParty)
@@ -278,7 +352,7 @@ namespace BanditMilitias
             };
         }
 
-        internal static void Trash(MobileParty mobileParty)
+        internal static void Trash(MobileParty mobileParty, bool removeHeroes = true)
         {
             try
             {
@@ -290,7 +364,11 @@ namespace BanditMilitias
                 Log.Debug?.Log(ex);
             }
 
-            mobileParty.LeaderHero?.RemoveMilitiaHero();
+            if (removeHeroes)
+            {
+                mobileParty.LeaderHero?.RemoveMilitiaHero();
+            }
+            
             mobileParty.Ai.DisableAi();
             var parties = PartiesWithoutPartyComponent(Campaign.Current.CampaignObjectManager).ToListQ();
             if (parties.Remove(mobileParty))
@@ -516,7 +594,6 @@ namespace BanditMilitias
         // builds a set of 4 weapons that won't include more than 1 bow or shield, nor any lack of ammo
         private static Equipment BuildViableEquipmentSet()
         {
-            //T.Restart();
             var gear = new Equipment();
             var haveShield = false;
             var haveBow = false;
@@ -604,8 +681,9 @@ namespace BanditMilitias
                 Log.Debug?.Log($"Armour loaded: {ItemTypes.Select(k => k.Value).Sum(v => v.Count)}\n\tNon-armour loaded: {EquipmentItems.Count}\n\tArrows:{Arrows.Count}\n\tBolts:{Bolts.Count}\n\tMounts: {Mounts.Count}\n\tSaddles: {Saddles.Count}");
             }
 
-            //Log.Debug?.Log($"GEAR ==> {T.ElapsedTicks / 10000F:F3}ms");
-            return gear.Clone();
+            var clone = gear.Clone();
+            clone.SyncEquipments = true;
+            return clone;
         }
 
         // game world measurement
@@ -702,16 +780,10 @@ namespace BanditMilitias
             return troopRoster.GetTroopRoster().WhereQ(e => e.Character.Equipment[10].Item is not null).SumQ(e => e.Number);
         }
 
-        internal static Hero CreateHero(Clan clan)
+        internal static Hero CreateHero(Settlement settlement)
         {
-            var hero = CustomizedCreateHeroAtOccupation(Hideouts.GetRandomElement(), clan);
+            var hero = CustomizedCreateHeroAtOccupation(settlement);
             Heroes.Add(hero);
-            if (Rng.Next(0, 2) == 0)
-            {
-                hero.UpdatePlayerGender(true);
-                hero.FirstName.SetTextVariable("FEMALE", 1);
-                StringHelpers.SetCharacterProperties("HERO", hero.CharacterObject, hero.FirstName);
-            }
 
             EquipmentHelper.AssignHeroEquipmentFromEquipment(hero, BanditEquipment.GetRandomElement());
             if (Globals.Settings.CanTrain)
@@ -720,9 +792,27 @@ namespace BanditMilitias
                 hero.HeroDeveloper.AddSkillXp(DefaultSkills.Leadership, 150);
             }
 
-            var bodyProps = hero.CharacterObject.GetBodyProperties(hero.CharacterObject.Equipment);
-            StaticBodyProps(ref bodyProps) = StaticBodyProperties.GetRandomStaticBodyProperties();
+            RandomizeHeroAppearance(hero);
             return hero;
+        }
+
+        internal static void RandomizeHeroAppearance(Hero hero)
+        {
+            FaceGenerationParams faceGenerationParams = FaceGenerationParams.Create() with
+            {
+                CurrentRace = hero.CharacterObject.Race,
+                CurrentGender = hero.IsFemale ? 1 : 0,
+                CurrentAge = hero.Age,
+            };
+            faceGenerationParams.SetRandomParamsExceptKeys(faceGenerationParams.CurrentRace, faceGenerationParams.CurrentGender, (int)faceGenerationParams.CurrentAge, out float _);
+            BodyProperties bodyProperties = hero.CharacterObject.GetBodyProperties(hero.BattleEquipment);
+            MBBodyProperties.ProduceNumericKeyWithParams(faceGenerationParams, hero.BattleEquipment.EarsAreHidden, hero.BattleEquipment.MouthIsHidden, ref bodyProperties);
+            SetStaticBodyProps(hero, bodyProperties.StaticProperties);
+        }
+
+        private static void SetStaticBodyProps(Hero hero, StaticBodyProperties staticBodyProperties)
+        {
+            AccessTools.Property(typeof(Hero), "StaticBodyProperties").SetValue(hero, staticBodyProperties);
         }
 
         // temporary "safety" bail-out, to be removed
@@ -765,7 +855,7 @@ namespace BanditMilitias
         {
             mobileParty.LeaderHero.Gold = Convert.ToInt32(mobileParty.Party.TotalStrength * GoldMap.ElementAt(Globals.Settings.GoldReward.SelectedIndex).Value);
             mobileParty.MemberRoster.AddToCounts(mobileParty.GetBM().Leader.CharacterObject, 1, false, 0, 0, true, 0);
-            actualClan(mobileParty) = Clan.BanditFactions.First(c => c.Culture == mobileParty.HomeSettlement.Culture);
+            // actualClan(mobileParty) = Clan.BanditFactions.First(c => c.Culture == mobileParty.HomeSettlement.Culture);
             if (PartyImageMap.TryGetValue(mobileParty, out _))
                 PartyImageMap[mobileParty] = new ImageIdentifierVM(mobileParty.GetBM().Banner);
             else
@@ -931,7 +1021,7 @@ namespace BanditMilitias
             }
         }
 
-        private static Hero CustomizedCreateHeroAtOccupation(Settlement settlement, Clan clan)
+        private static Hero CustomizedCreateHeroAtOccupation(Settlement settlement)
         {
             var max = 0;
             foreach (var characterObject in Globals.HeroTemplates)
@@ -953,7 +1043,13 @@ namespace BanditMilitias
                 }
             }
 
-            var specialHero = HeroCreator.CreateSpecialHero(template, settlement, clan, clan);
+            template = CharacterObject.CreateFrom(template);
+            if (MBRandom.RandomInt(2) == 1)
+            {
+                template.IsFemale = true;
+            }
+            
+            var specialHero = HeroCreator.CreateSpecialHero(template, settlement, settlement.OwnerClan, settlement.OwnerClan);
             var num3 = MBRandom.RandomFloat * 20f;
             specialHero.AddPower(num3);
             specialHero.ChangeState(Hero.CharacterStates.Active);
@@ -965,6 +1061,7 @@ namespace BanditMilitias
 
         internal static void InitMap()
         {
+            T.Restart();
             Log.Debug?.Log("MapScreen.OnInitialize");
             ClearGlobals();
             PopulateItems();
@@ -1006,6 +1103,7 @@ namespace BanditMilitias
             DoPowerCalculations(true);
             ReHome();
             var bmCount = MobileParty.All.CountQ(m => m.IsBM());
+            Log.Debug?.Log($"INIT ==> {T.ElapsedTicks / 10000F:F3}ms");
             Log.Debug?.Log($"Militias: {bmCount}.");
         }
 

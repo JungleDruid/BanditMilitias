@@ -115,6 +115,20 @@ namespace BanditMilitias
 
             if (mobileParty.MapEvent is not null)
                 return;
+            
+            // cancel merge if the target has changed its behavior
+            if (mobileParty.DefaultBehavior == AiBehavior.EngageParty 
+                && mobileParty.TargetParty is not null 
+                && !FactionManager.IsAtWarAgainstFaction(mobileParty.MapFaction, mobileParty.TargetParty.MapFaction))
+            {
+                if (mobileParty.TargetParty.DefaultBehavior != AiBehavior.EngageParty ||
+                    mobileParty.TargetParty.TargetParty != mobileParty)
+                {
+                    mobileParty.Ai.SetMoveModeHold();
+                    BMThink(mobileParty);
+                    return;
+                }
+            }
 
             // near any Hideouts?
             if (mobileParty.IsBM())
@@ -195,58 +209,7 @@ namespace BanditMilitias
                 //Log.Debug?.Log($"{new string('>', 100)} MOVING {mobileParty.StringId,20} {mergeTarget.StringId,20}");
                 mobileParty.Ai.SetMoveEngageParty(mergeTarget);
                 mergeTarget.Ai.SetMoveEngageParty(mobileParty);
-                return;
             }
-
-            //Log.Debug?.Log($"{new string('=', 100)} MERGING {mobileParty.StringId,20} {mergeTarget.StringId,20}");
-            // create a new party merged from the two
-            var rosters = MergeRosters(mobileParty, mergeTarget);
-            var clan = mobileParty.ActualClan ?? mergeTarget.ActualClan ?? Clan.BanditFactions.GetRandomElementInefficiently();
-            var bm = MobileParty.CreateParty("Bandit_Militia", new ModBanditMilitiaPartyComponent(clan), m => m.ActualClan = clan);
-            InitMilitia(bm, rosters, mobileParty.Position2D);
-            // each BM gets the average of Avoidance values
-            var calculatedAvoidance = new Dictionary<Hero, float>();
-
-            void CalcAverageAvoidance(ModBanditMilitiaPartyComponent BM)
-            {
-                foreach (var entry in BM.Avoidance)
-                    if (!calculatedAvoidance.TryGetValue(entry.Key, out _))
-                        calculatedAvoidance.Add(entry.Key, entry.Value);
-                    else
-                    {
-                        calculatedAvoidance[entry.Key] += entry.Value;
-                        calculatedAvoidance[entry.Key] /= 2;
-                    }
-            }
-
-            if (mobileParty.PartyComponent is ModBanditMilitiaPartyComponent BM1)
-                CalcAverageAvoidance(BM1);
-
-            if (mergeTarget.PartyComponent is ModBanditMilitiaPartyComponent BM2)
-                CalcAverageAvoidance(BM2);
-
-            bm.GetBM().Avoidance = calculatedAvoidance;
-            // teleport new militias near the player
-            if (Globals.Settings.TestingMode)
-            {
-                // in case a prisoner
-                var party = Hero.MainHero.PartyBelongedTo ?? Hero.MainHero.PartyBelongedToAsPrisoner.MobileParty;
-                bm.Position2D = party.Position2D;
-            }
-
-            bm.Party.SetVisualAsDirty();
-            try
-            {
-                // can throw if Clan is null (doesn't happen in 3.9 apparently)
-                Trash(mobileParty);
-                Trash(mergeTarget);
-            }
-            catch (Exception ex)
-            {
-                Log.Debug?.Log(ex);
-            }
-
-            DoPowerCalculations();
         }
 
         internal static void BMThink(MobileParty mobileParty)
@@ -262,6 +225,16 @@ namespace BanditMilitias
                         mobileParty.Ai.SetMovePatrolAroundSettlement(target);
                     }
 
+                    break;
+                case AiBehavior.GoToSettlement:
+                    // Sometimes they might be stuck in a hideout
+                    if (mobileParty.TargetSettlement?.IsHideout == true)
+                    {
+                        if (!mobileParty.IsEngaging && mobileParty.Position2D.Distance(mobileParty.TargetSettlement.Position2D) == 0f)
+                        {
+                            mobileParty.Ai.SetMoveModeHold();
+                        }
+                    }
                     break;
                 case AiBehavior.PatrolAroundPoint:
                     // PILLAGE!
@@ -400,8 +373,15 @@ namespace BanditMilitias
 
             try
             {
-                var settlement = Settlement.All.WhereQ(s => !s.IsVisible && s.GetTrackDistanceToMainAgent() > 100).GetRandomElementInefficiently()
-                                 ?? Settlement.All.WhereQ(s => s.GetTrackDistanceToMainAgent() > 200).GetRandomElementInefficiently(); // for cheats that make all IsVisible
+                var settlement = Settlement.All
+                    .WhereQ(s => s.IsHideout && s.GetTrackDistanceToMainAgent() > 100)
+                    .GetRandomElementInefficiently();
+                if (settlement == null)
+                {
+                    Log.Debug?.Log($"[Warning] SpawnBM: No hideout available.");
+                    return;
+                }
+                
                 for (var i = 0;
                      MilitiaPowerPercent + 1 <= Globals.Settings.GlobalPowerPercent
                      && i < (Globals.Settings.GlobalPowerPercent - MilitiaPowerPercent) / 24f;
@@ -457,8 +437,8 @@ namespace BanditMilitias
                             }
                     }
 
-                    var bm = MobileParty.CreateParty("Bandit_Militia", new ModBanditMilitiaPartyComponent(clan), m => m.ActualClan = clan);
-                    InitMilitia(bm, new[] { roster, TroopRoster.CreateDummyTroopRoster() }, settlement.GatePosition);
+                    var bm = MobileParty.CreateParty("Bandit_Militia", new ModBanditMilitiaPartyComponent(settlement, null), m => m.ActualClan = settlement.OwnerClan);
+                    InitMilitia(bm, [roster, TroopRoster.CreateDummyTroopRoster()], settlement.GatePosition);
                     DoPowerCalculations();
 
                     // teleport new militias near the player

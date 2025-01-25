@@ -25,7 +25,7 @@ namespace BanditMilitias.Patches
                     .WhereQ(p => p.Party?.MobileParty?.PartyComponent is ModBanditMilitiaPartyComponent);
                 foreach (var party in loserBMs)
                 {
-                    var heroes = party.Party.MemberRoster.RemoveIf(t => t.Character.IsHero).ToListQ();
+                    var heroes = party.Party.MemberRoster.RemoveIf(t => t.Character.IsHero && t.Character.HeroObject.IsWounded).ToListQ();
                     for (var i = 0; i < heroes.Count; i++)
                     {
                         //Log.Debug?.Log($"<<< RemoveMilitiaHero {heroes[i].Character.Name} ({heroes[i].Character.StringId}) at FinishBattle");
@@ -58,7 +58,7 @@ namespace BanditMilitias.Patches
                 foreach (var party in loserBMs)
                 {
                     // Globals.LootRecord.Remove(party.Party.MapEventSide);
-                    var heroes = party.Party.MemberRoster.RemoveIf(t => t.Character.IsHero).ToListQ();
+                    var heroes = party.Party.MemberRoster.RemoveIf(t => t.Character.IsHero && t.Character.HeroObject.IsWounded).ToListQ();
                     for (var i = 0; i < heroes.Count; i++)
                     {
                         if (!IsRegistered(heroes[i].Character))

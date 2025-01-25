@@ -1,12 +1,9 @@
 using System;
-using System.Collections.Generic;
 using HarmonyLib;
 using SandBox.View.Map;
 using SandBox.ViewModelCollection.Map;
-using TaleWorlds.CampaignSystem;
 using TaleWorlds.CampaignSystem.Issues;
 using TaleWorlds.CampaignSystem.Party;
-using TaleWorlds.Core;
 using TaleWorlds.Engine;
 using TaleWorlds.InputSystem;
 using TaleWorlds.Library;

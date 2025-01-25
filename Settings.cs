@@ -1,9 +1,7 @@
-using System;
 using MCM.Abstractions.Attributes;
 using MCM.Abstractions.Attributes.v2;
 using MCM.Abstractions.Base.Global;
 using MCM.Common;
-using TaleWorlds.LinQuick;
 
 // ReSharper disable UnusedAutoPropertyAccessor.Local
 // ReSharper disable FieldCanBeMadeReadOnly.Local
@@ -155,10 +153,10 @@ namespace BanditMilitias
         public bool AllowPillaging { get; private set; } = true;
 
         [SettingPropertyText("{=BMStringSetting}Bandit Militia", Order = 0, HintText = "{=BMStringSettingDesc}What to name a Bandit Militia.", RequireRestart = false)]
-        public string BanditMilitiaString { get; set; }
+        public string BanditMilitiaString { get; set; } = "Bandit Militia";
 
         [SettingPropertyText("{=BMLeaderlessStringSetting}Leaderless Bandit Militia", Order = 1, HintText = "{=BMLeaderlessStringSettingDesc}What to name a Bandit Militia with no leader.", RequireRestart = false)]
-        public string LeaderlessBanditMilitiaString { get; set; }
+        public string LeaderlessBanditMilitiaString { get; set; } = "Leaderless Bandit Militia";
 
         [SettingPropertyBool("{=BMMarkers}Militia Map Markers", HintText = "{=BMMarkersDesc}Have omniscient view of BMs.", Order = 2, RequireRestart = false)]
         public bool Trackers { get; private set; } = false;
@@ -171,11 +169,17 @@ namespace BanditMilitias
 
         [SettingPropertyBool("{=BMRaidNotices}Village raid notices", HintText = "{=BMRaidNoticesDesc}When your fiefs are raided you'll see a banner message.", Order = 5, RequireRestart = false)]
         public bool ShowRaids { get; set; } = true;
+        
+        [SettingPropertyBool("{=BMSkipConversations}Skip Conversations", HintText = "{=BMSkipConversationsDesc}Skip conversations with Bandit Militias. You won't be able to bribe them if enabled.", Order = 6, RequireRestart = false)]
+        public bool SkipConversations { get; set; } = false;
+        
+        [SettingPropertyBool("{=BMCheckVoiceGender}Check Voice Gender", HintText = "{=BMCheckVoiceGenderDesc}Double-check if the bandit voice lines match the gender. There are some official voice lines with male voices but don't specify gender, so female bandit leaders will speak with male voices if this option is disabled.", Order = 7, RequireRestart = false)]
+        public bool CheckVoiceGender { get; set; } = true;
 
-        [SettingPropertyBool("{=BMDebug}Debug Logging", HintText = "{=BMDebugDesc}Creates logfile output in the mod folder.", Order = 6, RequireRestart = false)]
+        [SettingPropertyBool("{=BMDebug}Debug Logging", HintText = "{=BMDebugDesc}Creates logfile output in the mod folder.", Order = 98, RequireRestart = false)]
         public bool Debug { get; private set; }
 
-        [SettingPropertyBool("{=BMTesting}Testing Mode", HintText = "{=BMTestingDesc}Teleports BMs to you.", Order = 7, RequireRestart = false)]
+        [SettingPropertyBool("{=BMTesting}Testing Mode", HintText = "{=BMTestingDesc}Teleports BMs to you.", Order = 99, RequireRestart = false)]
         public bool TestingMode { get; internal set; }
 
         private const string id = "BanditMilitias";
