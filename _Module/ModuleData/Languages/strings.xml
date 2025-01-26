@@ -58,6 +58,8 @@
         <string id="BMWeakerDesc" text="10 means any party 10% weaker will be ignored.\n100 attacks without restriction."/>
         <string id="BMPillage" text="Allow Pillaging"/>
         <string id="BMPillageDesc" text="Allow PILLAGING!."/>
+        <string id="BMPillageChance" text="Pillaging Chance"/>
+        <string id="BMPillageChanceDesc" text="The chance of Bandit Militias AI to consider raiding a village. It triggers once per in-game hour for every bandit militia party, so a smaller value is advised."/>
         <string id="BMStringSetting" text="Bandit Militia"/>
         <string id="BMStringSettingDesc" text="What to name a Bandit Militia."/>
         <string id="BMLeaderlessStringSetting" text="Leaderless Bandit Militia"/>

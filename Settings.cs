@@ -101,15 +101,15 @@ namespace BanditMilitias
         [SettingPropertyGroup("{=BMAdjustments}Militia Adjustments")]
         public int LooterUpgradePercent { get; private set; } = 15;
 
-        [SettingPropertyInteger("{=BMUpgrade}Upgrade Units", 0, 100, HintText = "{=BMUpgradeDesc}Upgrade (at most) this percentage of troops when training occurs.", Order = 10, RequireRestart = false)]
+        [SettingPropertyInteger("{=BMUpgrade}Upgrade Units", 0, 100, HintText = "{=BMUpgradeDesc}Upgrade (at most) this percentage of troops when training occurs.", Order = 12, RequireRestart = false)]
         [SettingPropertyGroup("{=BMAdjustments}Militia Adjustments")]
         public int UpgradeUnitsPercent { get; private set; } = 25;
 
-        [SettingPropertyInteger("{=BMPower}Global Power", 0, 1000, HintText = "{=BMPowerDesc}Major setting.  Setting higher means more, bigger BMs.", Order = 11, RequireRestart = false)]
+        [SettingPropertyInteger("{=BMPower}Global Power", 0, 1000, HintText = "{=BMPowerDesc}Major setting.  Setting higher means more, bigger BMs.", Order = 13, RequireRestart = false)]
         [SettingPropertyGroup("{=BMAdjustments}Militia Adjustments")]
         public int GlobalPowerPercent { get; private set; } = 15;
 
-        [SettingPropertyInteger("{=BMTier}Max Training Tier", 1, 6, HintText = "{=BMTierDesc}BM won't train any units past this tier.", Order = 13, RequireRestart = false)]
+        [SettingPropertyInteger("{=BMTier}Max Training Tier", 1, 6, HintText = "{=BMTierDesc}BM won't train any units past this tier.", Order = 14, RequireRestart = false)]
         [SettingPropertyGroup("{=BMAdjustments}Militia Adjustments")]
         public int MaxTrainingTier { get; private set; } = 4;
 
@@ -120,6 +120,10 @@ namespace BanditMilitias
         [SettingPropertyBool("{=BMPillage}Allow Pillaging", HintText = "{=BMPillageDesc}Allow PILLAGING!.", Order = 10, RequireRestart = false)]
         [SettingPropertyGroup("{=BMAdjustments}Militia Adjustments")]
         public bool AllowPillaging { get; private set; } = true;
+        
+        [SettingPropertyFloatingInteger("{=BMPillageChance}Pillaging Chance", 0, 100, HintText = "{=BMPillageChanceDesc}The chance of Bandit Militias AI to consider raiding a village. It triggers once per in-game hour for every bandit militia party, so a smaller value is advised.", Order = 11, RequireRestart = false)]
+        [SettingPropertyGroup("{=BMAdjustments}Militia Adjustments")]
+        public float PillagingChance { get; private set; } = 1;
 
         [SettingPropertyText("{=BMStringSetting}Bandit Militia", Order = 0, HintText = "{=BMStringSettingDesc}What to name a Bandit Militia.", RequireRestart = false)]
         public string BanditMilitiaString { get; set; } = "Bandit Militia";

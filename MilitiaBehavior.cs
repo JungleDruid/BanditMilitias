@@ -28,27 +28,30 @@ namespace BanditMilitias
 
         public override void RegisterEvents()
         {
-            CampaignEvents.VillageBeingRaided.AddNonSerializedListener(this, v =>
+            CampaignEvents.VillageBeingRaided.AddNonSerializedListener(this, village =>
             {
-                if (Globals.Settings.ShowRaids
-                    && v.Owner?.LeaderHero == Hero.MainHero
-                    && v.Settlement.Party?.MapEvent is not null
-                    && v.Settlement.Party.MapEvent.PartiesOnSide(BattleSideEnum.Attacker)
-                        .AnyQ(m => m.Party.IsMobile && m.Party.MobileParty.IsBM()))
+                if (village.Settlement.Party?.MapEvent is null
+                    || !village.Settlement.Party.MapEvent.PartiesOnSide(BattleSideEnum.Attacker)
+                        .AnyQ(m => m.Party.IsMobile && m.Party.MobileParty.IsBM())) return;
+                PartyBase party = village.Settlement.Party.MapEvent.PartiesOnSide(BattleSideEnum.Attacker).First().Party;
+                Log.Debug?.Log($"{party.Name}({party.MobileParty.StringId} is raiding {village.Name}.");
+                if (Globals.Settings.ShowRaids && village.Owner?.LeaderHero == Hero.MainHero)
                 {
-                    InformationManager.DisplayMessage(
-                        new InformationMessage($"{v.Name} is being raided by {v.Settlement.Party.MapEvent.PartiesOnSide(BattleSideEnum.Attacker).First().Party.Name}!"));
+                    InformationManager.DisplayMessage(new InformationMessage($"{village.Name} is being raided by {party.Name}!"));
                 }
             });
             CampaignEvents.RaidCompletedEvent.AddNonSerializedListener(this, (_, m) =>
             {
-                if (Globals.Settings.ShowRaids
-                    && m.AttackerSide.Parties
-                        .AnyQ(mep => mep.Party.IsMobile && mep.Party.MobileParty.IsBM()))
+                if (!m.AttackerSide.Parties.AnyQ(mep => mep.Party.IsMobile && mep.Party.MobileParty.IsBM())) return;
+                PartyBase party = m.AttackerSide.Parties.First().Party;
+                Log.Debug?.Log($"{party.Name}({party.MobileParty.StringId} has done raiding {m.MapEventSettlement?.Name}.");
+                party.MobileParty.Ai.SetDoNotMakeNewDecisions(false);
+                party.MobileParty.Ai.SetMoveModeHold();
+                if (Globals.Settings.ShowRaids)
                 {
                     InformationManager.DisplayMessage(
                         new InformationMessage($"{m.MapEventSettlement?.Name} raided!  " +
-                                               $"{m.AttackerSide.Parties.First().Party.Name} is fat with loot near {SettlementHelper.FindNearestTown().Name}!"));
+                                               $"{party.Name} is fat with loot near {SettlementHelper.FindNearestTown().Name}!"));
                 }
             });
 
@@ -278,7 +281,7 @@ namespace BanditMilitias
                     if (Globals.Settings.AllowPillaging
                         && mobileParty.LeaderHero is not null
                         && mobileParty.Party.TotalStrength > MilitiaPartyAveragePower
-                        && Rng.NextDouble() < SmallChance
+                        && MBRandom.RandomFloat < Globals.Settings.PillagingChance * 0.01f
                         && GetCachedBMs().CountQ(m => m.MobileParty.ShortTermBehavior is AiBehavior.RaidSettlement) < RaidCap)
                     {
                         target = SettlementHelper.FindNearestVillage(s =>
@@ -308,8 +311,9 @@ namespace BanditMilitias
                         if (target.OwnerClan == Hero.MainHero.Clan)
                             InformationManager.DisplayMessage(new InformationMessage($"{mobileParty.Name} is raiding your village {target.Name} near {target.Town?.Name}!"));
 
-                        //Log.Debug?.Log($"{new string('=', 100)} {target.Village.VillageState}");
+                        Log.Debug?.Log($"{mobileParty.Name}({mobileParty.StringId} has decided to raid {target.Name}.");
                         mobileParty.Ai.SetMoveRaidSettlement(target);
+                        mobileParty.Ai.SetDoNotMakeNewDecisions(true);
                     }
 
                     break;
