@@ -36,18 +36,32 @@ namespace BanditMilitias
         {
             get
             {
-                cachedName ??= new TextObject((string)GetLocalizedText.Invoke(
-                    null, new object[] { $"{Possess(Leader.FirstName.ToString())} {Globals.Settings.BanditMilitiaString}" }));
-                cachedName.SetTextVariable("IS_BANDIT", 1);
+                cachedName ??= CreateCachedName();
                 return cachedName;
             }
         }
 
         public override void ChangePartyLeader(Hero newLeader)
         {
-            Traverse.Create(this).Field<Hero>("<Leader>k__BackingField").Value = newLeader;
-            if (newLeader != null && Leader != newLeader && !Leader.IsDead)
-                Leader?.RemoveMilitiaHero();
+            if (newLeader is null)
+            {
+                if (!Heroes.Contains(leader))
+                {
+                    ForceRemoveLeader();
+                }
+            }
+            else
+            {
+                Log.Debug?.Log($"{newLeader.Name} is taking over {MobileParty.Name}({MobileParty.StringId}) from {leader.Name}[{leader.HeroState}].");
+                leader = newLeader;
+                ClearCachedName();
+            }
+        }
+
+        public void ForceRemoveLeader()
+        {
+            leader = null;
+            ClearCachedName();
         }
 
         protected override void OnInitialize()
@@ -55,7 +69,7 @@ namespace BanditMilitias
             base.OnInitialize();
             if (!IsBandit(MobileParty))
                 IsBandit(MobileParty) = true;
-            OnWarPartyRemoved.Invoke(Clan, new[] { this });
+            OnWarPartyRemoved.Invoke(Clan, [this]);
         }
 
         public ModBanditMilitiaPartyComponent(Settlement settlement, Hero hero)
@@ -69,6 +83,29 @@ namespace BanditMilitias
             HiddenInEncyclopedia(hero.CharacterObject) = true;
             homeSettlement = hero.HomeSettlement;
             leader = hero;
+        }
+
+        internal TextObject CreateCachedName()
+        {
+            if (leader is null)
+            {
+                return new TextObject(Globals.Settings.LeaderlessBanditMilitiaString, new Dictionary<string, object>
+                {
+                    ["IS_BANDIT"] = 1
+                });
+            }
+
+            return new TextObject("{=BMPartyName}{LEADER_NAME}'s {PARTY_NAME}", new Dictionary<string, object>
+            {
+                ["IS_BANDIT"] = 1,
+                ["LEADER_NAME"] = leader.FirstName,
+                ["PARTY_NAME"] = Globals.Settings.BanditMilitiaString
+            });
+        }
+
+        public override void ClearCachedName()
+        {
+            cachedName = null;
         }
     }
 }

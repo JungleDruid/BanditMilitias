@@ -206,6 +206,22 @@ namespace BanditMilitias
         {
             if (gameStarterObject is CampaignGameStarter gameStarter)
                 gameStarter.AddBehavior(new MilitiaBehavior());
+            Settings.OnSettingsChanged += OnSettingsChanged;
+        }
+
+        private static void OnSettingsChanged()
+        {
+            foreach (ModBanditMilitiaPartyComponent bm in AllBMs)
+            {
+                bm.ClearCachedName();
+                bm.MobileParty?.SetCustomName(null);
+            }
+        }
+
+        public override void OnGameEnd(Game game)
+        {
+            Globals.Heroes.Clear();
+            Settings.OnSettingsChanged -= OnSettingsChanged;
         }
 
         public override void OnGameInitializationFinished(Game game)

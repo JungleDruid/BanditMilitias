@@ -2,6 +2,7 @@ using MCM.Abstractions.Attributes;
 using MCM.Abstractions.Attributes.v2;
 using MCM.Abstractions.Base.Global;
 using MCM.Common;
+using TaleWorlds.Localization;
 
 // ReSharper disable UnusedAutoPropertyAccessor.Local
 // ReSharper disable FieldCanBeMadeReadOnly.Local
@@ -18,40 +19,8 @@ namespace BanditMilitias
 {
     public class Settings : AttributeGlobalSettings<Settings>
     {
-        // public override IEnumerable<ISettingsPreset> GetBuiltInPresets()
-        // {
-        //     var basePresets = base.GetBuiltInPresets().ToListQ();
-        //     var hardMode = new JsonSettingsPreset("Hard Mode", "Hard Mode","Hard Mode",null, () =>
-        //     {
-        //         Debug = false;
-        //         CanTrain = true;
-        //         return this;
-        //     basePresets.Add(hardMode);
-        //     return basePresets;
-        // }
-        // var hardMode = new JsonSettingsPreset("Hard Mode", "Hard Mode","Hard Mode",null, () =>
-        // {
-        //     Debug = false;
-        //     CanTrain = true;
-        //     RandomBanners = true;
-        //     XpGift = new Dropdown<string>(Globals.DifficultyXpMap.Keys, 3);
-        //     GoldReward = new Dropdown<string>(Globals.GoldMap.Keys, 2);
-        //     CooldownHours = 8;
-        //     DisperseSize = 30;
-        //     RandomSplitChance = 50;
-        //     MergeableSize = 10;
-        //     GrowthChance = 100;
-        //     GrowthPercent = 3;
-        //     MilitiaSpawn = true;
-        //     SpawnChance = 50;
-        //     MaxItemValue = 10000;
-        //     LooterUpgradePercent = 66;
-        //     UpgradeUnitsPercent = 33;
-        //     GlobalPowerPercent = 33;
-        //     MaxTrainingTier = 5;
-        //     return this;
-        // }); 
-
+        public delegate void OnSettingsChangedDelegate();
+        public static event OnSettingsChangedDelegate OnSettingsChanged;
         public override string FormatType => "json";
         public override string FolderName => "BanditMilitias";
 
@@ -187,6 +156,27 @@ namespace BanditMilitias
         private string displayName = $"BanditMilitias {typeof(Settings).Assembly.GetName().Version.ToString(3)}";
         // private int idealCountBoost = 5;
         // internal int idealBoostFactor;
+
+        public override void OnPropertyChanged(string propertyName = null)
+        {
+            base.OnPropertyChanged(propertyName);
+            VerifyProperties();
+
+            OnSettingsChanged?.Invoke();
+        }
+
+        private void VerifyProperties()
+        {
+            if (string.IsNullOrWhiteSpace(BanditMilitiaString))
+            {
+                BanditMilitiaString = new TextObject("{=BMStringSettingDefault}Bandit Militia").ToString();
+            }
+
+            if (string.IsNullOrWhiteSpace(LeaderlessBanditMilitiaString))
+            {
+                LeaderlessBanditMilitiaString = new TextObject("{=BMLeaderlessStringSettingDefault}Leaderless Bandit Militia").ToString();
+            }
+        }
 
         public override string Id => id;
         public override string DisplayName => displayName;

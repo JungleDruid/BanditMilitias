@@ -64,13 +64,34 @@ namespace BanditMilitias
             if (Globals.Settings.Debug)
             {
                 var bandits = MobileParty.AllBanditParties.WhereQ(p => !p.IsBM());
-                Log.Debug?.Log($"Total regular bandit parties, Day {CampaignTime.Now.GetDayOfYear}, {bandits.Count()}");
+                Log.Debug?.Log($"[Info] Total regular bandit parties, Day {CampaignTime.Now.GetDayOfYear}, {bandits.Count()}");
                 foreach (var hero in Hero.AllAliveHeroes.WhereQ(h => h.PartyBelongedTo.IsBM()))
                 {
                     if (hero.BattleEquipment[5].IsEmpty)
                     {
-                        Log.Debug?.Log($"Naked hero {hero.PartyBelongedTo.Name}");
+                        Log.Debug?.Log($"[Warning] Naked hero {hero.PartyBelongedTo.Name}");
                     }
+                }
+
+                foreach (var hero in Heroes.WhereQ(h => h.IsDead))
+                {
+                    Log.Debug?.Log($"[Warning] {hero.Name} is dead. [{hero.DeathMark} during Day {hero.DeathDay.GetDayOfYear}]");
+                }
+
+                foreach (var hero in Heroes.WhereQ(h => h.PartyBelongedTo is null).ToArrayQ())
+                {
+                    Log.Debug?.Log($"[Info] Removing stray hero {hero.Name} from daily cleanup. HeroState: {hero.HeroState}");
+                    hero.RemoveMilitiaHero();
+                }
+
+                foreach (var hero in Heroes.WhereQ(h => h.IsPrisoner))
+                {
+                    Log.Debug?.Log($"[Warning] {hero.Name} is a prisoner.");
+                }
+
+                foreach (var bm in AllBMs.WhereQ(c => c.MobileParty.LeaderHero is null))
+                {
+                    Log.Debug?.Log($"[Warning] {bm.MobileParty.Name}({bm.MobileParty.StringId}) does not have a leader.");
                 }
             }
         }
@@ -115,6 +136,22 @@ namespace BanditMilitias
 
             if (mobileParty.MapEvent is not null)
                 return;
+
+            if (mobileParty.IsBM())
+            {
+                // let another hero in the party take over the leaderless militia
+                // the game auto-replaces the leader if there's another hero in the party, just putting this here in case of some oversight
+                if (mobileParty.LeaderHero is null && mobileParty.MemberRoster.TotalHeroes > 0)
+                {
+                    var leader = mobileParty.MemberRoster.GetTroopRoster()
+                        .WhereQ(t => t.Character.IsHero)
+                        .OrderByQ(t => -t.Character.HeroObject.Power)
+                        .First().Character.HeroObject;
+                    mobileParty.ChangePartyLeader(leader);
+                    mobileParty.Ai.SetMoveModeHold();
+                    return;
+                }
+            }
             
             // cancel merge if the target has changed its behavior
             if (mobileParty.DefaultBehavior == AiBehavior.EngageParty 
@@ -440,6 +477,8 @@ namespace BanditMilitias
                     var bm = MobileParty.CreateParty("Bandit_Militia", new ModBanditMilitiaPartyComponent(settlement, null), m => m.ActualClan = settlement.OwnerClan);
                     InitMilitia(bm, [roster, TroopRoster.CreateDummyTroopRoster()], settlement.GatePosition);
                     DoPowerCalculations();
+                    
+                    Log.Debug?.Log($"[Info] Spawned {bm.Name}({bm.StringId}).");
 
                     // teleport new militias near the player
                     if (Globals.Settings.TestingMode)
@@ -461,6 +500,17 @@ namespace BanditMilitias
         public override void SyncData(IDataStore dataStore)
         {
             dataStore.SyncData("Heroes", ref Heroes);
+            if (dataStore.IsLoading)
+            {
+                // clean up heroes from an old bug
+                Globals.Heroes.RemoveAll(h => !Hero.AllAliveHeroes.Contains(h));
+                var deadHeroes = Heroes.WhereQ(h => Hero.DeadOrDisabledHeroes.Contains(h)).ToListQ();
+                foreach (Hero hero in deadHeroes)
+                {
+                    Helper.DeadOrDisabledHeroes(Campaign.Current.CampaignObjectManager).Remove(hero);
+                }
+                Globals.Heroes.RemoveAll(h => deadHeroes.Contains(h));
+            }
         }
     }
 }

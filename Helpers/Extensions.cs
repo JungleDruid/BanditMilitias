@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+using System.Diagnostics;
 using HarmonyLib;
 using TaleWorlds.CampaignSystem;
 using TaleWorlds.CampaignSystem.Actions;
@@ -10,9 +10,6 @@ namespace BanditMilitias
 {
     internal static class Extensions
     {
-        private static readonly AccessTools.FieldRef<CampaignObjectManager, List<Hero>> DeadOrDisabledHeroes =
-            AccessTools.FieldRefAccess<CampaignObjectManager, List<Hero>>("_deadOrDisabledHeroes");
-
         private static readonly AccessTools.FieldRef<MobileParty, bool> IsCurrentlyUsedByAQuest =
             AccessTools.FieldRefAccess<MobileParty, bool>("_isCurrentlyUsedByAQuest");
 
@@ -32,9 +29,10 @@ namespace BanditMilitias
 
         internal static void RemoveMilitiaHero(this Hero hero)
         {
+            Globals.Log.Debug?.Log($"[Debug] Removing hero {hero.Name}({hero.StringId})");
             MBObjectManager.Instance.UnregisterObject(hero.CharacterObject);
             KillCharacterAction.ApplyByRemove(hero);
-            DeadOrDisabledHeroes(Campaign.Current.CampaignObjectManager).Remove(hero);
+            Helper.DeadOrDisabledHeroes(Campaign.Current.CampaignObjectManager).Remove(hero);
             Globals.Heroes.Remove(hero);
         }
 

@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Reflection.Emit;
 using HarmonyLib;
 using Helpers;
 using SandBox.GameComponents;
 using SandBox.View.Map;
-using SandBox.ViewModelCollection;
 using SandBox.ViewModelCollection.Map;
 using SandBox.ViewModelCollection.Nameplate;
 using StoryMode.GameComponents;
@@ -15,9 +15,12 @@ using TaleWorlds.CampaignSystem.Actions;
 using TaleWorlds.CampaignSystem.AgentOrigins;
 using TaleWorlds.CampaignSystem.CampaignBehaviors;
 using TaleWorlds.CampaignSystem.CampaignBehaviors.AiBehaviors;
+using TaleWorlds.CampaignSystem.CharacterDevelopment;
+using TaleWorlds.CampaignSystem.Conversation;
 using TaleWorlds.CampaignSystem.Encounters;
 using TaleWorlds.CampaignSystem.GameComponents;
 using TaleWorlds.CampaignSystem.GameMenus;
+using TaleWorlds.CampaignSystem.MapEvents;
 using TaleWorlds.CampaignSystem.Party;
 using TaleWorlds.CampaignSystem.Roster;
 using TaleWorlds.CampaignSystem.Settlements;
@@ -178,19 +181,45 @@ namespace BanditMilitias.Patches
         }
 
         // prevent bandit militia leaders from being identified as lords
-        [HarmonyPatch(typeof(LordConversationsCampaignBehavior),
-            "conversation_lord_greets_under_24_hours_on_condition")]
-        public static class LordConversationsCampaignBehavior_conversation_lord_greets_under_24_hours_on_condition_Patch
+        [HarmonyPatch(typeof(ConversationManager), "GetSentenceMatch")]
+        public static class ConversationManagerGetSentenceMatchPatch
         {
-            public static bool Prefix(LordConversationsCampaignBehavior __instance, ref bool __result)
+            public static bool Prefix(int sentenceIndex, bool onlyPlayer, List<ConversationSentence> ____sentences, ref bool __result)
             {
-                if (PlayerEncounter.EncounteredMobileParty.IsBM())
+                if (Hero.OneToOneConversationHero?.Clan?.IsBanditFaction == true)
                 {
-                    __result = false;
-                    return false;
+                    var sentence = ____sentences[sentenceIndex];
+                    if (Globals.LordConversationTokens.Contains(sentence.InputToken) ||
+                        Globals.LordConversationTokens.Contains(sentence.OutputToken))
+                    {
+                        __result = false;
+                        return false;
+                    }
                 }
 
                 return true;
+            }
+        }
+
+        // skip the dialogues with bandit militia heroes after combat
+        [HarmonyPatch(typeof(PlayerEncounter), "DoCaptureHeroes")]
+        public static class PlayerEncounterDoCaptureHeroesPatch
+        {
+            public static void Prefix(ref List<TroopRosterElement> ____capturedHeroes, MapEvent ____mapEvent)
+            {
+                MethodInfo GetPrisonerRosterReceivingLootShare = AccessTools.Method(typeof(MapEvent), "GetPrisonerRosterReceivingLootShare");
+                TroopRoster receivingLootShare = (TroopRoster)GetPrisonerRosterReceivingLootShare.Invoke(____mapEvent, [PartyBase.MainParty]);
+                receivingLootShare.RemoveIf(t => t.Character.HeroObject?.IsDead == true);
+                ____capturedHeroes ??= receivingLootShare
+                    .RemoveIf((Predicate<TroopRosterElement>)(t => t.Character.IsHero && !t.Character.IsBM()))
+                    .ToList<TroopRosterElement>();
+
+                if (____capturedHeroes.Count == 0) return;
+                
+                var heroes = ____capturedHeroes.WhereQ(h => h.Character.IsBM()).ToListQ();
+                foreach (var hero in heroes)
+                    hero.Character.HeroObject.RemoveMilitiaHero();
+                ____capturedHeroes.RemoveAll(h => heroes.Contains(h));
             }
         }
 
@@ -242,24 +271,6 @@ namespace BanditMilitias.Patches
                         delta = party2Strength - party1Strength;
                     var deltaPercent = delta / party1Strength * 100;
                     __result = deltaPercent <= Globals.Settings.MaxStrengthDeltaPercent;
-                }
-            }
-        }
-
-        // force Heroes to die in simulated combat
-        [HarmonyPriority(Priority.High)]
-        [HarmonyPatch(typeof(SPScoreboardVM), "TroopNumberChanged")]
-        public static class SPScoreboardVMTroopNumberChangedPatch
-        {
-            public static void Prefix(BasicCharacterObject character, ref int numberDead, ref int numberWounded)
-            {
-                if (character is CharacterObject c
-                    && numberWounded > 0
-                    && c.HeroObject?.PartyBelongedTo is not null
-                    && c.HeroObject.PartyBelongedTo.IsBM())
-                {
-                    numberDead = 1;
-                    numberWounded = 0;
                 }
             }
         }
@@ -341,6 +352,49 @@ namespace BanditMilitias.Patches
             }
         }
 
+        // the hero died after winning the battle
+        [HarmonyPatch(typeof(DefaultSkillLevelingManager), "OnPersonalSkillExercised")]
+        public static class DefaultSkillLevelingManagerOnPersonalSkillExercisedPatch
+        {
+            public static bool Prefix(Hero hero)
+            {
+                if (hero is null) return true;
+                
+                if (hero.HeroDeveloper is null)
+                {
+                    if (Globals.Heroes.Contains(hero))
+                        hero.RemoveMilitiaHero();
+                    return false;
+                }
+
+                return true;
+            }
+        }
+
+        // the hero died in a simulated battle?
+        [HarmonyPatch(typeof(MobilePartyHelper), nameof(MobilePartyHelper.CanTroopGainXp))]
+        public static class MobilePartyHelperCanTroopGainXpPatch
+        {
+            public static bool Prefix(PartyBase owner, CharacterObject character, ref bool __result)
+            {
+                if (character.UpgradeTargets is null)
+                {
+                    if (character.IsHero && Globals.Heroes.Contains(character.HeroObject))
+                        character.HeroObject.RemoveMilitiaHero();
+                    
+                    if (owner.MemberRoster.Contains(character))
+                    {
+                        owner.MemberRoster.RemoveTroop(character);
+                    }
+                    
+                    __result = false;
+                    return false;
+                }
+
+                return true;
+            }
+        }
+
         // copied from 1.9 assembly since there is no BanditPartyComponent in BMs
         [HarmonyPatch(typeof(MobilePartyAi), "CalculateContinueChasingScore")]
         public class MobilePartyCalculateContinueChasingScore
@@ -377,38 +431,6 @@ namespace BanditMilitias.Patches
             {
                 if (!__instance.IsBandit && __instance.IsBM())
                     IsBandit(__instance) = true;
-            }
-        }
-
-        [HarmonyPatch(typeof(TroopRoster), "AddToCountsAtIndex")]
-        public static class TroopRosterAddToCountsAtIndex
-        {
-            public static void Prefix(TroopRoster __instance, int index, ref int countChange, int woundedCountChange)
-            {
-                //var troop = __instance.GetElementCopyAtIndex(index);
-                //if (!troop.Character.IsHero && troop.Character.OriginalCharacter != null)
-                //{
-                //    var sb = new StringBuilder();
-                //    new StackTrace().GetFrames()?.Skip(2).Take(6).Do(s => sb.AppendLine(s.GetMethod().Name));
-                //    Log.Debug?.Log($"Registered: {IsRegistered(troop.Character)} Match: {troop.Character.FindRoster()?.GetTroopRoster().FirstOrDefault(c => c.Character.StringId == troop.Character.StringId).Character?.StringId}");
-                //    Log.Debug?.Log($"AddToCountsAtIndex: {troop.Character.Name} {troop.Character.StringId} {countChange} {woundedCountChange}");
-                //    Log.Debug?.Log($"{sb}");
-                //}
-            }
-
-            public static Exception Finalizer(TroopRoster __instance, int index, Exception __exception)
-            {
-                switch (__exception)
-                {
-                    case null:
-                        return null;
-                    case IndexOutOfRangeException:
-                        //Log.Debug?.Log("HACK Squelching IndexOutOfRangeException at TroopRoster.AddToCountsAtIndex");
-                        return null;
-                    default:
-                        Log.Debug?.Log(__exception);
-                        return __exception;
-                }
             }
         }
 

@@ -87,6 +87,7 @@ namespace BanditMilitias
         internal static List<CharacterObject> BasicRanged = new();
         internal static List<CharacterObject> BasicInfantry = new();
         internal static List<CharacterObject> BasicCavalry = new();
+        internal static HashSet<int> LordConversationTokens;
 
         // ReSharper disable once InconsistentNaming
         internal static MapMobilePartyTrackerVM MapMobilePartyTrackerVM;

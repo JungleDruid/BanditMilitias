@@ -60,6 +60,9 @@
         <string id="BMStringSettingDesc" text="如何命名强盗团。"/>
         <string id="BMLeaderlessStringSetting" text="无主强盗团命名"/>
         <string id="BMLeaderlessStringSettingDesc" text="如何命名无主强盗团。"/>
+        <string id="BMStringSettingDefault" text="强盗团"/>
+        <string id="BMLeaderlessStringSettingDefault" text="无主强盗团"/>
+        <string id="BMPartyName" text="{LEADER_NAME}的{PARTY_NAME}"/>
         <string id="BMMarkers" text="强盗团地图标记"/>
         <string id="BMMarkersDesc" text="在地图上标记出所有的强盗团。"/>
         <string id="BMTrackSize" text="强盗团踪迹"/>
