@@ -35,7 +35,7 @@ namespace BanditMilitias.Patches
                 foreach (var party in loserBMs)
                 {
                     MobileParty mobileParty = party.Party.MobileParty;
-                    if (mobileParty.LeaderHero.IsDead && mobileParty.MemberRoster.TotalHealthyCount >= Globals.Settings.DisperseSize)
+                    if (mobileParty.LeaderHero?.IsDead == true && mobileParty.MemberRoster.TotalHealthyCount >= Globals.Settings.DisperseSize)
                     {
                         Logger.LogDebug($"{mobileParty.Name}({mobileParty.StringId}) has lost a battle and its leader {mobileParty.LeaderHero.Name}, but was not dispersed.");
                         RemoveMilitiaLeader(mobileParty);

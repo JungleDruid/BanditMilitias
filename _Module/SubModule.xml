@@ -2,7 +2,7 @@
 <Module>
   <Name value="BanditMilitias" />
   <Id value="BanditMilitias" />
-  <Version value="v4.0.0" />
+  <Version value="v4.0.1" />
   <Official value="false" />
   <DefaultModule value="false" />
   <SingleplayerModule value="true" />

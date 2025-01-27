@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <Version>4.0.0</Version>
+        <Version>4.0.1</Version>
         <TargetFramework>net48</TargetFramework>
         <Nullable>disable</Nullable>
         <BaseOutputPath>$(BANNERLORD_GAME_DIR)/Modules/BanditMilitias/bin/Win64_Shipping_Client/</BaseOutputPath>

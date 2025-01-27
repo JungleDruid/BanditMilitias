@@ -37,7 +37,8 @@ namespace BanditMilitias
 
         public void OnServiceRegistration()
         {
-            var config = JsonConvert.DeserializeObject<BanditMilitiaConfig>(File.ReadAllText(new PlatformFilePath(ConfigDir, $"{Name}.json").FileFullPath));
+            string configPath = new PlatformFilePath(ConfigDir, $"{Name}.json").FileFullPath;
+            var config = File.Exists(configPath) ? JsonConvert.DeserializeObject<BanditMilitiaConfig>(File.ReadAllText(configPath)) : new BanditMilitiaConfig();
             this.AddSerilogLoggerProvider($"{Name}.log", [$"{Name}.*"], o => o.MinimumLevel.Is((LogEventLevel)config.MinLogLevel));
         }
 
