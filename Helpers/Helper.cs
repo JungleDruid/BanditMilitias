@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using HarmonyLib;
 using Helpers;
+using Microsoft.Extensions.Logging;
 using SandBox.View.Map;
 using SandBox.ViewModelCollection.Map;
 using TaleWorlds.CampaignSystem;
@@ -28,12 +29,16 @@ using TaleWorlds.MountAndBlade;
 using TaleWorlds.ObjectSystem;
 using static BanditMilitias.Globals;
 
+// ReSharper disable CheckNamespace
 // ReSharper disable InconsistentNaming  
 
 namespace BanditMilitias
 {
-    internal static class Helper
+    internal sealed class Helper
     {
+        private static ILogger _logger;
+        private static ILogger Logger => _logger ??= LogFactory.Get<Helper>();
+        
         private const float ReductionFactor = 0.8f;
         private const float SplitDivisor = 2;
         private const float RemovedHero = 1;
@@ -134,7 +139,7 @@ namespace BanditMilitias
             {
                 if (string.IsNullOrEmpty(item.EquipmentElement.Item?.Name?.ToString()))
                 {
-                    Log.Debug?.Log("Bad item: " + item.EquipmentElement);
+                    Logger.LogWarning("Bad item: " + item.EquipmentElement);
                     continue;
                 }
 
@@ -216,7 +221,7 @@ namespace BanditMilitias
                 InitMilitia(bm2, rosters2, original.Position2D);
                 bm1.GetBM().Avoidance = original.GetBM().Avoidance;
                 bm2.GetBM().Avoidance = original.GetBM().Avoidance;
-                Log.Debug?.Log($"[Info] {original.Name}({original.StringId}) split into {bm1.Name}({bm1.StringId}) and {bm2.Name}({bm2.StringId})");
+                Logger.LogDebug($"{original.Name}({original.StringId}) split into {bm1.Name}({bm1.StringId}) and {bm2.Name}({bm2.StringId})");
                 ItemRoster(bm1.Party) = inventory1;
                 ItemRoster(bm2.Party) = inventory2;
                 bm1.Party.SetVisualAsDirty();
@@ -226,7 +231,7 @@ namespace BanditMilitias
             }
             catch (Exception ex)
             {
-                Log.Debug?.Log(ex);
+                Logger.LogError(ex, $"Error splitting {original}");
             }
         }
 
@@ -316,7 +321,7 @@ namespace BanditMilitias
             }
 
             bm.Party.SetVisualAsDirty();
-            Log.Debug?.Log($"[Info] {bm.Name}({bm.StringId}) is merged from {mobileParty.Name}({mobileParty.StringId}) and {mergeTarget.Name}({mergeTarget.StringId})");
+            Logger.LogDebug($"{bm.Name}({bm.StringId}) is merged from {mobileParty.Name}({mobileParty.StringId}) and {mergeTarget.Name}({mergeTarget.StringId})");
             try
             {
                 // can throw if Clan is null (doesn't happen in 3.9 apparently)
@@ -325,7 +330,7 @@ namespace BanditMilitias
             }
             catch (Exception ex)
             {
-                Log.Debug?.Log(ex);
+                Logger.LogError(ex, $"Error merging {mobileParty} and {mergeTarget}");
             }
 
             DoPowerCalculations();
@@ -372,7 +377,7 @@ namespace BanditMilitias
 
         internal static void Trash(MobileParty mobileParty, RemoveHeroCondition removeHeroCondition = RemoveHeroCondition.All)
         {
-            Log.Debug?.Log($"[Debug] Trashing {mobileParty.Name}({mobileParty.StringId}), removeHeroes: {removeHeroCondition}");
+            Logger.LogTrace($"Trashing {mobileParty.Name}({mobileParty.StringId}), removeHeroes: {removeHeroCondition}");
             try
             {
                 mobileParty.IsActive = false;
@@ -380,7 +385,7 @@ namespace BanditMilitias
             }
             catch (Exception ex)
             {
-                Log.Debug?.Log(ex);
+                Logger.LogError(ex, $"Error trashing {mobileParty}");
             }
 
             if (removeHeroCondition != RemoveHeroCondition.None)
@@ -424,13 +429,12 @@ namespace BanditMilitias
                 RemoveBadItems(); // haven't determined if BM is causing these
                 GetCachedBMs(true).Do(bm => Trash(bm.MobileParty));
                 InformationManager.DisplayMessage(new InformationMessage("BANDIT MILITIAS CLEARED"));
-                var bmCount = MobileParty.All.CountQ(m => m.IsBM());
                 // should be zero
-                Log.Debug?.Log($"Militias: {bmCount}.");
+                Logger.LogDebug($"Militias after nuke: {MobileParty.All.CountQ(m => m.IsBM())}.");
             }
             catch (Exception ex)
             {
-                Log.Debug?.Log(ex);
+                Logger.LogError(ex, "Error during nuke.");
             }
         }
 
@@ -443,7 +447,7 @@ namespace BanditMilitias
             {
                 Traverse.Create(Campaign.Current.CampaignObjectManager).Field<List<MobileParty>>("_partiesWithoutPartyComponent").Value =
                     Traverse.Create(Campaign.Current.CampaignObjectManager).Field<List<MobileParty>>("_partiesWithoutPartyComponent").Value.Except(parties).ToListQ();
-                Log.Debug?.Log($">>> FLUSH {parties.Count} {Globals.Settings.BanditMilitiaString}");
+                Logger.LogTrace($">>> FLUSH {parties.Count} {Globals.Settings.BanditMilitiaString}");
                 foreach (var mobileParty in parties)
                 {
                     try
@@ -452,7 +456,7 @@ namespace BanditMilitias
                     }
                     catch (Exception ex)
                     {
-                        Log.Debug?.Log(ex);
+                        Logger.LogError(ex, $"Error flushing {mobileParty}");
                         Meow();
                     }
                 }
@@ -471,22 +475,21 @@ namespace BanditMilitias
                         if (prisoner.StringId.EndsWith("Bandit_Militia"))
                         {
                             //Debugger.Break();
-                            Log.Debug?.Log($">>> FLUSH BM hero prisoner {prisoner.HeroObject?.Name} at {settlement.Name}.");
+                            Logger.LogTrace($">>> FLUSH BM hero prisoner {prisoner.HeroObject?.Name} at {settlement.Name}.");
                             settlement.Party.PrisonRoster.AddToCounts(prisoner, -1);
                             prisoner.HeroObject.RemoveMilitiaHero();
                         }
                     }
                     catch (Exception ex)
                     {
-                        Log.Debug?.Log(ex);
+                        Logger.LogError(ex, $"Error flushing {settlement}");
                     }
             }
 
             var leftovers = Hero.AllAliveHeroes.WhereQ(h => h.StringId.EndsWith("Bandit_Militia")).ToListQ();
-            for (var index = 0; index < leftovers.Count; index++)
+            foreach (Hero hero in leftovers)
             {
-                var hero = leftovers[index];
-                Log.Debug?.Log("Removing leftover hero " + hero);
+                Logger.LogTrace("Removing leftover hero " + hero);
                 hero.RemoveMilitiaHero();
             }
         }
@@ -509,7 +512,7 @@ namespace BanditMilitias
                         }
                     }
 
-                    Log.Debug?.Log(">>> FLUSH MapEvent.");
+                    Logger.LogTrace(">>> FLUSH MapEvent.");
                     Traverse.Create(mapEvent).Field<MapEventState>("_state").Value = MapEventState.Wait;
                     mapEvent.FinalizeEvent();
                     foreach (var BM in mapEvent.InvolvedParties.WhereQ(p => p.IsMobile && p.MobileParty.IsBM()))
@@ -697,8 +700,8 @@ namespace BanditMilitias
             }
             catch (Exception ex)
             {
-                Log.Debug?.Log(ex);
-                Log.Debug?.Log($"Armour loaded: {ItemTypes.Select(k => k.Value).Sum(v => v.Count)}\n\tNon-armour loaded: {EquipmentItems.Count}\n\tArrows:{Arrows.Count}\n\tBolts:{Bolts.Count}\n\tMounts: {Mounts.Count}\n\tSaddles: {Saddles.Count}");
+                Logger.LogError(ex, "Error building equipment set.");
+                Logger.LogError($"Armour loaded: {ItemTypes.Select(k => k.Value).Sum(v => v.Count)}\n\tNon-armour loaded: {EquipmentItems.Count}\n\tArrows:{Arrows.Count}\n\tBolts:{Bolts.Count}\n\tMounts: {Mounts.Count}\n\tSaddles: {Saddles.Count}");
             }
 
             var clone = gear.Clone();
@@ -757,7 +760,7 @@ namespace BanditMilitias
 
         internal static void PrintInstructionsAroundInsertion(List<CodeInstruction> codes, int insertPoint, int insertSize, int adjacentNum = 5)
         {
-            Log.Debug?.Log($"Inserting {insertSize} at {insertPoint}.");
+            Logger.LogTrace($"Inserting {insertSize} at {insertPoint}.");
 
             // in case insertPoint is near the start of the method's IL
             var adjustedAdjacent = codes.Count - adjacentNum >= 0 ? adjacentNum : Math.Max(0, codes.Count - adjacentNum);
@@ -765,12 +768,12 @@ namespace BanditMilitias
             {
                 // codes[266 - 5 + 0].opcode
                 // codes[266 - 5 + 4].opcode
-                Log.Debug?.Log($"{codes[insertPoint - adjustedAdjacent + i].opcode,-10}{codes[insertPoint - adjustedAdjacent + i].operand}");
+                Logger.LogTrace($"{codes[insertPoint - adjustedAdjacent + i].opcode,-10}{codes[insertPoint - adjustedAdjacent + i].operand}");
             }
 
             for (var i = 0; i < insertSize; i++)
             {
-                Log.Debug?.Log($"{codes[insertPoint + i].opcode,-10}{codes[insertPoint + i].operand}");
+                Logger.LogTrace($"{codes[insertPoint + i].opcode,-10}{codes[insertPoint + i].operand}");
             }
 
             // in case insertPoint is near the end of the method's IL
@@ -779,7 +782,7 @@ namespace BanditMilitias
             {
                 // 266 + 2 - 5 + 0
                 // 266 + 2 - 5 + 4
-                Log.Debug?.Log($"{codes[insertPoint + insertSize + adjustedAdjacent + i].opcode,-10}{codes[insertPoint + insertSize + adjustedAdjacent + i].operand}");
+                Logger.LogTrace($"{codes[insertPoint + insertSize + adjustedAdjacent + i].opcode,-10}{codes[insertPoint + insertSize + adjustedAdjacent + i].operand}");
             }
         }
 
@@ -867,7 +870,7 @@ namespace BanditMilitias
             catch (Exception ex)
             {
                 InformationManager.DisplayMessage(new InformationMessage("Problem adjusting cavalry count, please open a bug report."));
-                Log.Debug?.Log(ex);
+                Logger.LogError(ex, "Error adjusting cavalry count.");
             }
         }
 
@@ -980,7 +983,7 @@ namespace BanditMilitias
             }
             catch (Exception ex)
             {
-                Log.Debug?.Log("Bandit Militias is failing to configure parties!  Exception: " + ex);
+                Logger.LogError(ex, "Bandit Militias is failing to configure parties!");
                 Trash(mobileParty);
             }
         }
@@ -1005,7 +1008,7 @@ namespace BanditMilitias
             militia.InitializeMobilePartyAtPosition(rosters[0], rosters[1], MobilePartyHelper.FindReachablePointAroundPosition(position, 1));
             ConfigureMilitia(militia);
             TrainMilitia(militia);
-            Log.Debug?.Log($"[Debug] {militia.Name}({militia.StringId}) initialized with {militia.MemberRoster.TotalRegulars} troops and {militia.MemberRoster.TotalHeroes} heroes. [{militia.MemberRoster.GetTroopRoster()
+            Logger.LogTrace($"{militia.Name}({militia.StringId}) initialized with {militia.MemberRoster.TotalRegulars} troops and {militia.MemberRoster.TotalHeroes} heroes. [{militia.MemberRoster.GetTroopRoster()
                 .WhereQ(t => t.Character.IsHero)
                 .SelectQ(t => t.Character.HeroObject.Name.ToString()).Join()}]");
         }
@@ -1014,15 +1017,13 @@ namespace BanditMilitias
         {
             try
             {
-                if (Log.Debug is null)
-                    return;
                 var troopString = $"{mobileParty.Party.NumberOfAllMembers} troop" + (mobileParty.Party.NumberOfAllMembers > 1 ? "s" : "");
                 var strengthString = $"{Math.Round(mobileParty.Party.TotalStrength)} strength";
-                Log.Debug?.Log($"{$"New Bandit Militia led by {mobileParty.LeaderHero?.Name}",-70} | {troopString,10} | {strengthString,12} | >>> {GlobalMilitiaPower / CalculatedGlobalPowerLimit * 100}%");
+                Logger.LogTrace($"{$"New Bandit Militia led by {mobileParty.LeaderHero?.Name}",-70} | {troopString,10} | {strengthString,12} | >>> {GlobalMilitiaPower / CalculatedGlobalPowerLimit * 100}%");
             }
             catch (Exception ex)
             {
-                Log.Debug?.Log(ex);
+                Logger.LogError(ex, "Error in LogMilitiaFormed");
             }
         }
 
@@ -1087,7 +1088,7 @@ namespace BanditMilitias
         internal static void InitMap()
         {
             T.Restart();
-            Log.Debug?.Log("MapScreen.OnInitialize");
+            Logger.LogTrace("MapScreen.OnInitialize");
             ClearGlobals();
             PopulateItems();
             Looters = Clan.BanditFactions.First(c => c.StringId == "looters");
@@ -1131,9 +1132,7 @@ namespace BanditMilitias
 
             DoPowerCalculations(true);
             ReHome();
-            var bmCount = MobileParty.All.CountQ(m => m.IsBM());
-            Log.Debug?.Log($"INIT ==> {T.ElapsedTicks / 10000F:F3}ms");
-            Log.Debug?.Log($"Militias: {bmCount}.");
+            Logger.LogTrace($"InitMap took {T.ElapsedTicks / 10000F:F3}ms to finish, there are {MobileParty.All.CountQ(m => m.IsBM())} bandit militias.");
         }
 
         internal static void RemoveBadItems()

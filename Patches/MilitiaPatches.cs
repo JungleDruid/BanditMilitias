@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 using HarmonyLib;
 using Helpers;
+using Microsoft.Extensions.Logging;
 using SandBox.GameComponents;
 using SandBox.View.Map;
 using SandBox.ViewModelCollection.Map;
@@ -40,8 +41,10 @@ using static BanditMilitias.Globals;
 
 namespace BanditMilitias.Patches
 {
-    internal static class MilitiaPatches
+    internal sealed class MilitiaPatches
     {
+        private static ILogger _logger;
+        private static ILogger Logger => _logger ??= LogFactory.Get<MilitiaPatches>();
         private static readonly AccessTools.FieldRef<MobilePartyAi, int> numberOfRecentFleeingFromAParty =
             AccessTools.FieldRefAccess<MobilePartyAi, int>("_numberOfRecentFleeingFromAParty");
 
@@ -124,8 +127,8 @@ namespace BanditMilitias.Patches
             {
                 if (mobileParty.IsBM())
                 {
-                    //Log.Debug?.Log($"Preventing {mobileParty} from entering {settlement.Name}");
-                    MilitiaBehavior.BMThink(mobileParty);
+                    Logger.LogTrace($"Preventing {mobileParty} from entering {settlement.Name}");
+                    mobileParty.Ai.SetMoveModeHold();
                     return false;
                 }
 
@@ -529,7 +532,7 @@ namespace BanditMilitias.Patches
                 if (__instance.Party == null)
                 {
                     __result = 1f;
-                    Log.Debug?.Log($"[Warning] MobilePartyGetTotalStrengthWithFollowers: {__instance.Name}({__instance.StringId}) does not have a Party.");
+                    Logger.LogError($"MobileParty.GetTotalStrengthWithFollowers: {__instance.Name}({__instance.StringId}) does not have a Party.");
                     return false;
                 }
                 

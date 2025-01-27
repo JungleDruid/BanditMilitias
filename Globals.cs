@@ -43,8 +43,6 @@ namespace BanditMilitias
             AllBMs = new ModBanditMilitiaPartyComponent[] { };
         }
 
-        internal static DeferringLogger Log = new();
-
         // merge/split criteria
         internal const float MergeDistance = 1.5f;
         internal const float FindRadius = 20;

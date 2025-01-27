@@ -1,15 +1,21 @@
-using System.Diagnostics;
 using HarmonyLib;
+using Microsoft.Extensions.Logging;
 using TaleWorlds.CampaignSystem;
 using TaleWorlds.CampaignSystem.Actions;
 using TaleWorlds.CampaignSystem.Party;
 using TaleWorlds.Core;
 using TaleWorlds.ObjectSystem;
 
+// ReSharper disable CheckNamespace
+// ReSharper disable InconsistentNaming
+
 namespace BanditMilitias
 {
     internal static class Extensions
     {
+        private static ILogger _logger;
+        private static ILogger Logger => _logger ??= LogFactory.Get<SubModule>();
+        
         private static readonly AccessTools.FieldRef<MobileParty, bool> IsCurrentlyUsedByAQuest =
             AccessTools.FieldRefAccess<MobileParty, bool>("_isCurrentlyUsedByAQuest");
 
@@ -29,7 +35,7 @@ namespace BanditMilitias
 
         internal static void RemoveMilitiaHero(this Hero hero)
         {
-            Globals.Log.Debug?.Log($"[Debug] Removing hero {hero.Name}({hero.StringId})");
+            Logger.LogDebug($"Removing hero {hero.Name}({hero.StringId})");
             MBObjectManager.Instance.UnregisterObject(hero.CharacterObject);
             KillCharacterAction.ApplyByRemove(hero);
             Helper.DeadOrDisabledHeroes(Campaign.Current.CampaignObjectManager).Remove(hero);

@@ -1,14 +1,17 @@
 ﻿using System;
 using HarmonyLib;
+using Microsoft.Extensions.Logging;
 using TaleWorlds.CampaignSystem.Roster;
-using static BanditMilitias.Globals;
 
 // ReSharper disable InconsistentNaming
 
 namespace BanditMilitias.Patches
 {
-    public static class Hacks
+    public sealed class Hacks
     {
+        private static ILogger _logger;
+        private static ILogger Logger => _logger ??= LogFactory.Get<Hacks>();
+        
         // throws during nuke (apparently not in 3.9)
         // parameters are included for debugging
         [HarmonyPatch(typeof(TroopRoster), "ClampXp")]
@@ -17,7 +20,7 @@ namespace BanditMilitias.Patches
             public static Exception Finalizer(Exception __exception, TroopRoster __instance)
             {
                 if (__exception is not null)
-                    Log.Debug?.Log(__exception);
+                    Logger.LogError(__exception, "Error at TroopRoster.ClampXp");
 
                 return null;
             }

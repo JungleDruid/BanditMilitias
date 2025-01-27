@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Helpers;
+using Microsoft.Extensions.Logging;
 using TaleWorlds.CampaignSystem;
 using TaleWorlds.CampaignSystem.Party;
 using TaleWorlds.CampaignSystem.Party.PartyComponents;
@@ -20,7 +21,9 @@ namespace BanditMilitias
 {
     public class MilitiaBehavior : CampaignBehaviorBase
     {
-        private const double SmallChance = 0.0005;
+        private static ILogger _logger;
+        private static ILogger Logger => _logger ??= LogFactory.Get<MilitiaBehavior>();
+
         internal const float Increment = 5;
         private const float EffectRadius = 100;
         private const int AdjustRadius = 50;
@@ -34,7 +37,7 @@ namespace BanditMilitias
                     || !village.Settlement.Party.MapEvent.PartiesOnSide(BattleSideEnum.Attacker)
                         .AnyQ(m => m.Party.IsMobile && m.Party.MobileParty.IsBM())) return;
                 PartyBase party = village.Settlement.Party.MapEvent.PartiesOnSide(BattleSideEnum.Attacker).First().Party;
-                Log.Debug?.Log($"{party.Name}({party.MobileParty.StringId} is raiding {village.Name}.");
+                Logger.LogDebug($"{party.Name}({party.MobileParty.StringId} is raiding {village.Name}.");
                 if (Globals.Settings.ShowRaids && village.Owner?.LeaderHero == Hero.MainHero)
                 {
                     InformationManager.DisplayMessage(new InformationMessage($"{village.Name} is being raided by {party.Name}!"));
@@ -44,7 +47,7 @@ namespace BanditMilitias
             {
                 if (!m.AttackerSide.Parties.AnyQ(mep => mep.Party.IsMobile && mep.Party.MobileParty.IsBM())) return;
                 PartyBase party = m.AttackerSide.Parties.First().Party;
-                Log.Debug?.Log($"{party.Name}({party.MobileParty.StringId} has done raiding {m.MapEventSettlement?.Name}.");
+                Logger.LogDebug($"{party.Name}({party.MobileParty.StringId} has done raiding {m.MapEventSettlement?.Name}.");
                 party.MobileParty.Ai.SetDoNotMakeNewDecisions(false);
                 party.MobileParty.Ai.SetMoveModeHold();
                 if (Globals.Settings.ShowRaids)
@@ -64,37 +67,30 @@ namespace BanditMilitias
 
         private void DailyTick()
         {
-            if (Globals.Settings.Debug)
+            if (Globals.Settings.MinLogLevel.SelectedValue <= LogLevel.Debug)
             {
-                var bandits = MobileParty.AllBanditParties.WhereQ(p => !p.IsBM());
-                Log.Debug?.Log($"[Info] Total regular bandit parties, Day {CampaignTime.Now.GetDayOfYear}, {bandits.Count()}");
-                foreach (var hero in Hero.AllAliveHeroes.WhereQ(h => h.PartyBelongedTo.IsBM()))
+                Logger.LogDebug($"Day {CampaignTime.Now.GetDayOfYear} Report: {MobileParty.AllBanditParties.CountQ(p => !p.IsBM())} regular bandits, {AllBMs.CountQ()} bandit militias, {AllBMs.CountQ(c => c.MobileParty.LeaderHero is null)} leaderless militias");
+                
+                // should be fixed
+                foreach (Hero hero in Heroes.WhereQ(hero => hero.BattleEquipment[5].IsEmpty))
                 {
-                    if (hero.BattleEquipment[5].IsEmpty)
-                    {
-                        Log.Debug?.Log($"[Warning] Naked hero {hero.PartyBelongedTo.Name}");
-                    }
+                    Logger.LogWarning($"Naked hero {hero} at {hero.PartyBelongedTo?.Name.ToString() ?? hero.CurrentSettlement?.Name.ToString() ?? "unknown"}");
                 }
 
-                foreach (var hero in Heroes.WhereQ(h => h.IsDead))
+                foreach (Hero hero in Heroes.WhereQ(h => h.IsDead))
                 {
-                    Log.Debug?.Log($"[Warning] {hero.Name} is dead. [{hero.DeathMark} during Day {hero.DeathDay.GetDayOfYear}]");
+                    Logger.LogWarning($"{hero.Name} is dead but not removed. [{hero.DeathMark} during Day {hero.DeathDay.GetDayOfYear}]");
                 }
 
-                foreach (var hero in Heroes.WhereQ(h => h.PartyBelongedTo is null).ToArrayQ())
+                foreach (Hero hero in Heroes.WhereQ(h => h.PartyBelongedTo is null).ToArrayQ())
                 {
-                    Log.Debug?.Log($"[Info] Removing stray hero {hero.Name} from daily cleanup. HeroState: {hero.HeroState}");
+                    Logger.LogDebug($"Removing stray hero {hero.Name} from daily cleanup. HeroState: {hero.HeroState}");
                     hero.RemoveMilitiaHero();
                 }
 
-                foreach (var hero in Heroes.WhereQ(h => h.IsPrisoner))
+                foreach (Hero hero in Heroes.WhereQ(h => h.IsPrisoner))
                 {
-                    Log.Debug?.Log($"[Warning] {hero.Name} is a prisoner.");
-                }
-
-                foreach (var bm in AllBMs.WhereQ(c => c.MobileParty.LeaderHero is null))
-                {
-                    Log.Debug?.Log($"[Warning] {bm.MobileParty.Name}({bm.MobileParty.StringId}) does not have a leader.");
+                    Logger.LogWarning($"{hero.Name} is a prisoner but was not removed.");
                 }
             }
         }
@@ -304,14 +300,14 @@ namespace BanditMilitias
                         if (BM.Avoidance.ContainsKey(target.Owner)
                             && Rng.NextDouble() * 100 <= BM.Avoidance[target.Owner])
                         {
-                            Log.Debug?.Log($"||| {mobileParty.Name} avoided pillaging {target}");
+                            Logger.LogTrace($"{mobileParty.Name}({mobileParty.StringId}) avoided pillaging {target}");
                             break;
                         }
 
                         if (target.OwnerClan == Hero.MainHero.Clan)
                             InformationManager.DisplayMessage(new InformationMessage($"{mobileParty.Name} is raiding your village {target.Name} near {target.Town?.Name}!"));
 
-                        Log.Debug?.Log($"{mobileParty.Name}({mobileParty.StringId} has decided to raid {target.Name}.");
+                        Logger.LogTrace($"{mobileParty.Name}({mobileParty.StringId} has decided to raid {target.Name}.");
                         mobileParty.Ai.SetMoveRaidSettlement(target);
                         mobileParty.Ai.SetDoNotMakeNewDecisions(true);
                     }
@@ -419,7 +415,7 @@ namespace BanditMilitias
                     .GetRandomElementInefficiently();
                 if (settlement == null)
                 {
-                    Log.Debug?.Log($"[Warning] SpawnBM: No hideout available.");
+                    Logger.LogWarning("No hideout available for spawning bandit militia.");
                     return;
                 }
                 
@@ -482,7 +478,7 @@ namespace BanditMilitias
                     InitMilitia(bm, [roster, TroopRoster.CreateDummyTroopRoster()], settlement.GatePosition);
                     DoPowerCalculations();
                     
-                    Log.Debug?.Log($"[Info] Spawned {bm.Name}({bm.StringId}).");
+                    Logger.LogDebug($"Spawned {bm.Name}({bm.StringId}) at {bm.Position2D}.");
 
                     // teleport new militias near the player
                     if (Globals.Settings.TestingMode)
@@ -497,7 +493,7 @@ namespace BanditMilitias
             {
                 InformationManager.DisplayMessage(new InformationMessage("Problem spawning BM, please open a bug report with the log.txt file (Debug setting must be on)."));
                 InformationManager.DisplayMessage(new InformationMessage($"{ex.Message}"));
-                Log.Debug?.Log(ex);
+                Logger.LogError(ex, "Error spawning bandit militia.");
             }
         }
 

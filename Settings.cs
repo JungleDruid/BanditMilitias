@@ -2,6 +2,7 @@ using MCM.Abstractions.Attributes;
 using MCM.Abstractions.Attributes.v2;
 using MCM.Abstractions.Base.Global;
 using MCM.Common;
+using Microsoft.Extensions.Logging;
 using TaleWorlds.Localization;
 
 // ReSharper disable UnusedAutoPropertyAccessor.Local
@@ -149,8 +150,9 @@ namespace BanditMilitias
         [SettingPropertyBool("{=BMCheckVoiceGender}Check Voice Gender", HintText = "{=BMCheckVoiceGenderDesc}Double-check if the bandit voice lines match the gender. There are some official voice lines with male voices but don't specify gender, so female bandit leaders will speak with male voices if this option is disabled.", Order = 7, RequireRestart = false)]
         public bool CheckVoiceGender { get; set; } = true;
 
-        [SettingPropertyBool("{=BMDebug}Debug Logging", HintText = "{=BMDebugDesc}Creates logfile output in the mod folder.", Order = 98, RequireRestart = false)]
-        public bool Debug { get; private set; }
+        [SettingPropertyDropdown("{=BMLoggingLevel}Log Level", HintText = "{=BMDebugDesc}Change the log level, requires restart.",
+            Order = 98, RequireRestart = true)]
+        public Dropdown<LogLevel> MinLogLevel { get; private set; } = new([LogLevel.Trace, LogLevel.Debug, LogLevel.Information, LogLevel.Warning, LogLevel.Error, LogLevel.Critical, LogLevel.None], 2);
 
         [SettingPropertyBool("{=BMTesting}Testing Mode", HintText = "{=BMTestingDesc}Teleports BMs to you.", Order = 99, RequireRestart = false)]
         public bool TestingMode { get; internal set; }

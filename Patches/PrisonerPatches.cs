@@ -1,5 +1,6 @@
 using System.Linq;
 using HarmonyLib;
+using Microsoft.Extensions.Logging;
 using TaleWorlds.CampaignSystem;
 using TaleWorlds.CampaignSystem.Actions;
 using TaleWorlds.CampaignSystem.CampaignBehaviors;
@@ -8,7 +9,6 @@ using TaleWorlds.CampaignSystem.Party;
 using TaleWorlds.CampaignSystem.Roster;
 using TaleWorlds.CampaignSystem.Settlements;
 using TaleWorlds.LinQuick;
-using TaleWorlds.Localization;
 using static BanditMilitias.Helper;
 using static BanditMilitias.Globals;
 
@@ -18,8 +18,11 @@ using static BanditMilitias.Globals;
 
 namespace BanditMilitias.Patches
 {
-    public static class PrisonerPatches
+    public sealed class PrisonerPatches
     {
+        private static ILogger _logger;
+        private static ILogger Logger => _logger ??= LogFactory.Get<PrisonerPatches>();
+        
         // rename leaderless BMs after they've lost the battle
         [HarmonyPatch(typeof(MapEvent), "FinishBattle")]
         public static class MapEventFinishBattlePatch
@@ -34,7 +37,7 @@ namespace BanditMilitias.Patches
                     MobileParty mobileParty = party.Party.MobileParty;
                     if (mobileParty.LeaderHero.IsDead && mobileParty.MemberRoster.TotalHealthyCount >= Globals.Settings.DisperseSize)
                     {
-                        Log.Debug?.Log($"[Info] {mobileParty.Name}({mobileParty.StringId}) has lost a battle and its leader {mobileParty.LeaderHero.Name}, but was not dispersed.");
+                        Logger.LogDebug($"{mobileParty.Name}({mobileParty.StringId}) has lost a battle and its leader {mobileParty.LeaderHero.Name}, but was not dispersed.");
                         RemoveMilitiaLeader(mobileParty);
                     }
 
@@ -73,7 +76,7 @@ namespace BanditMilitias.Patches
                     .WhereQ(p => p.Party?.MobileParty?.PartyComponent is ModBanditMilitiaPartyComponent);
                 foreach (var party in loserBMs)
                 {
-                    Log.Debug?.Log($"[Info] {party.Party.MobileParty.Name}({party.Party.MobileParty.StringId}) is defeated in battle.");
+                    Logger.LogDebug($"{party.Party.MobileParty.Name}({party.Party.MobileParty.StringId}) is defeated in battle.");
                     if (party.Party.MobileParty.MemberRoster.TotalHealthyCount < Globals.Settings.DisperseSize)
                         Trash(party.Party.MobileParty, RemoveHeroCondition.OnlyDead);
                 }
@@ -89,7 +92,7 @@ namespace BanditMilitias.Patches
                     PartyBase party = bm.Party;
                     if (party.LeaderHero?.IsDead == true)
                     {
-                        Log.Debug?.Log($"[Info] {party.MobileParty.Name}({party.MobileParty.StringId}) has won a battle but lost its leader {party.LeaderHero.Name}.");
+                        Logger.LogDebug($"{party.MobileParty.Name}({party.MobileParty.StringId}) has won a battle but lost its leader {party.LeaderHero.Name}.");
                         if (party.MemberRoster.Contains(party.LeaderHero.CharacterObject))
                             party.MemberRoster.RemoveTroop(party.LeaderHero.CharacterObject);
                         party.LeaderHero.RemoveMilitiaHero();
@@ -109,7 +112,7 @@ namespace BanditMilitias.Patches
             {
                 if (prisonerCharacter.IsBM())
                 {
-                    Log.Debug?.Log($"[Info] {prisonerCharacter.Name} is taken prisoner by {capturerParty.Name}.");
+                    Logger.LogDebug($"{prisonerCharacter.Name} is taken prisoner by {capturerParty.Name}.");
                     if (Heroes.Contains(prisonerCharacter))
                         prisonerCharacter.RemoveMilitiaHero();
                     return false;
@@ -127,7 +130,7 @@ namespace BanditMilitias.Patches
             {
                 if (prisoner.IsBM())
                 {
-                    Log.Debug?.Log($"[Info] {prisoner.Name} is released due to {detail}.");
+                    Logger.LogDebug($"{prisoner.Name} is released due to {detail}.");
                     if (Heroes.Contains(prisoner))
                         prisoner.RemoveMilitiaHero();
                     return false;
@@ -152,11 +155,11 @@ namespace BanditMilitias.Patches
                         troop.Character.HeroObject.RemoveMilitiaHero();
                         conversationParty.PrisonRoster.Add(troop);
                     }
-                    Log.Debug?.Log($"[Info] {conversationParty.Name}({conversationParty.StringId}) has joined to the player.");
+                    Logger.LogDebug($"{conversationParty.Name}({conversationParty.StringId}) has joined to the player.");
                 }
                 else
                 {
-                    Log.Debug?.Log($"[Info] {conversationParty.Name}({conversationParty.StringId}) has surrendered to the player.");
+                    Logger.LogDebug($"{conversationParty.Name}({conversationParty.StringId}) has surrendered to the player.");
                 }
             }
         }
@@ -169,7 +172,7 @@ namespace BanditMilitias.Patches
             {
                 if (heroToBeMoved.IsBM() && targetSettlement is not null)
                 {
-                    Log.Debug?.Log($"[Info] Removing stray hero {heroToBeMoved.Name} before they enter settlement {targetSettlement.Name}.");
+                    Logger.LogDebug($"Removing stray hero {heroToBeMoved.Name} before they enter settlement {targetSettlement.Name}.");
                     heroToBeMoved.RemoveMilitiaHero();
                     return false;
                 }

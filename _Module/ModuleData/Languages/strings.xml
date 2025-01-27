@@ -75,8 +75,8 @@
         <string id="BMBannersDesc" text="BMs will have unique banners, or basic bandit clan ones."/>
         <string id="BMRaidNotices" text="Village raid notices"/>
         <string id="BMRaidNoticesDesc" text="When your fiefs are raided you'll see a banner message."/>
-        <string id="BMDebug" text="Debug Logging"/>
-        <string id="BMDebugDesc" text="Creates logfile output in the mod folder."/>
+        <string id="BMLoggingLevel" text="Log Level"/>
+        <string id="BMLoggingLevelDesc" text="The log file is at &quot;Documents/Mount and Blade II Bannerlord/Configs/ModLogs/BanditMilitia_[Time].log&quot;"/>
         <string id="BMTesting" text="Testing Mode"/>
         <string id="BMTestingDesc" text="Teleports BMs to you."/>
     </strings>
