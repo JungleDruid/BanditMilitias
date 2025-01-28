@@ -25,6 +25,8 @@ internal class Commands
     private static ILogger _logger;
     private static ILogger Logger => _logger ??= LogFactory.Get<Commands>();
 
+    private static bool _pretendingToBeHuman = true;
+
     internal static void OnTick()
     {
         bool superKey = Campaign.Current != null
@@ -34,18 +36,27 @@ internal class Commands
 
         if (IsCat)
         {
-            if (superKey && Input.IsKeyPressed(InputKey.F9)) ShowAllPartiesOnMap();
+            if (superKey && Input.IsKeyPressed(InputKey.Tilde))
+            {
+                _pretendingToBeHuman = !_pretendingToBeHuman;
+                InformationManager.DisplayMessage(new InformationMessage(_pretendingToBeHuman ? "You are no longer a cat." : "You are a cat.", Colors.Cyan, "Debug"));
+            }
+            
+            if (!_pretendingToBeHuman)
+            {
+                if (superKey && Input.IsKeyPressed(InputKey.F9)) ShowAllPartiesOnMap();
 
-            if (Input.IsKeyPressed(InputKey.F1)) TeleportToRandomArmy();
+                if (Input.IsKeyPressed(InputKey.F1)) TeleportToRandomArmy();
 
-            if (Input.IsKeyPressed(InputKey.F2)) TeleportAllRegularBanditsToMe();
+                if (Input.IsKeyPressed(InputKey.F2)) TeleportAllRegularBanditsToMe();
 
-            if (Input.IsKeyPressed(InputKey.F3)) TeleportToRandomSeasideHideout();
+                if (Input.IsKeyPressed(InputKey.F3)) TeleportToRandomSeasideHideout();
 
-            if (superKey && Input.IsKeyPressed(InputKey.B)) Debugger.Break();
+                if (superKey && Input.IsKeyPressed(InputKey.B)) Debugger.Break();
 
-            if (superKey && Input.IsKeyPressed(InputKey.F10))
-                MobileParty.MainParty.ItemRoster.AddToCounts(MBObjectManager.Instance.GetObject<ItemObject>("grain"), 10000);
+                if (superKey && Input.IsKeyPressed(InputKey.F10))
+                    MobileParty.MainParty.ItemRoster.AddToCounts(MBObjectManager.Instance.GetObject<ItemObject>("grain"), 10000);
+            }
         }
 
         if (superKey && Input.IsKeyPressed(InputKey.F11)) ToggleTestingMode();
@@ -53,9 +64,9 @@ internal class Commands
         if (superKey && Input.IsKeyPressed(InputKey.F12)) PrintAllBanditMilitiaStats();
 
         bool nukeCommand = (Input.IsKeyDown(InputKey.LeftControl) || Input.IsKeyDown(InputKey.RightControl)) &&
-                            (Input.IsKeyDown(InputKey.LeftAlt) || Input.IsKeyDown(InputKey.RightAlt)) &&
-                            Input.IsKeyPressed(InputKey.N);
-        
+                           (Input.IsKeyDown(InputKey.LeftAlt) || Input.IsKeyDown(InputKey.RightAlt)) &&
+                           Input.IsKeyPressed(InputKey.N);
+
         if (nukeCommand) TryNuke();
     }
 
