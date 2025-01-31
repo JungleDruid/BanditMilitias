@@ -1,10 +1,8 @@
 using HarmonyLib;
 using Microsoft.Extensions.Logging;
 using TaleWorlds.CampaignSystem;
-using TaleWorlds.CampaignSystem.Actions;
 using TaleWorlds.CampaignSystem.Party;
 using TaleWorlds.Core;
-using TaleWorlds.ObjectSystem;
 
 // ReSharper disable CheckNamespace
 // ReSharper disable InconsistentNaming
@@ -31,15 +29,6 @@ namespace BanditMilitias
                    || mobileParty.ShortTermBehavior is AiBehavior.EngageParty
                        or AiBehavior.FleeToPoint
                        or AiBehavior.RaidSettlement;
-        }
-
-        internal static void RemoveMilitiaHero(this Hero hero)
-        {
-            Logger.LogDebug($"Removing hero {hero.Name}({hero.StringId})");
-            MBObjectManager.Instance.UnregisterObject(hero.CharacterObject);
-            KillCharacterAction.ApplyByRemove(hero);
-            Helper.DeadOrDisabledHeroes(Campaign.Current.CampaignObjectManager).Remove(hero);
-            Globals.Heroes.Remove(hero);
         }
 
         // ReSharper disable once InconsistentNaming

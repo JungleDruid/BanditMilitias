@@ -220,8 +220,6 @@ namespace BanditMilitias.Patches
                 if (____capturedHeroes.Count == 0) return;
                 
                 var heroes = ____capturedHeroes.WhereQ(h => h.Character.IsBM()).ToListQ();
-                foreach (var hero in heroes)
-                    hero.Character.HeroObject.RemoveMilitiaHero();
                 ____capturedHeroes.RemoveAll(h => heroes.Contains(h));
             }
         }
@@ -365,8 +363,6 @@ namespace BanditMilitias.Patches
                 
                 if (hero.HeroDeveloper is null)
                 {
-                    if (Globals.Heroes.Contains(hero))
-                        hero.RemoveMilitiaHero();
                     return false;
                 }
 
@@ -382,9 +378,6 @@ namespace BanditMilitias.Patches
             {
                 if (character.UpgradeTargets is null)
                 {
-                    if (character.IsHero && Globals.Heroes.Contains(character.HeroObject))
-                        character.HeroObject.RemoveMilitiaHero();
-                    
                     if (owner.MemberRoster.Contains(character))
                     {
                         owner.MemberRoster.RemoveTroop(character);
@@ -574,6 +567,22 @@ namespace BanditMilitias.Patches
             {
                 if (____homeSettlement is not null || ____bornSettlement is null || __instance.Clan?.IsBanditFaction != true) return;
                 ____homeSettlement = ____bornSettlement;
+            }
+        }
+        
+        // remove from Heroes list when killed
+        [HarmonyPatch(typeof(KillCharacterAction), "ApplyInternal")]
+        public class KillCharacterActionApplyInternalPatch
+        {
+            public static void Postfix(Hero victim,
+                Hero killer,
+                KillCharacterAction.KillCharacterActionDetail actionDetail,
+                bool showNotification,
+                bool isForced = false)
+            {
+                if (!Heroes.Contains(victim)) return;
+                Logger.LogTrace($"{victim} is killed by {killer} due to {actionDetail}");
+                Heroes.Remove(victim);
             }
         }
     }

@@ -3,6 +3,7 @@ using HarmonyLib;
 using Microsoft.Extensions.Logging;
 using TaleWorlds.CampaignSystem;
 using TaleWorlds.CampaignSystem.Actions;
+using TaleWorlds.CampaignSystem.BarterSystem.Barterables;
 using TaleWorlds.CampaignSystem.CampaignBehaviors;
 using TaleWorlds.CampaignSystem.MapEvents;
 using TaleWorlds.CampaignSystem.Party;
@@ -10,7 +11,6 @@ using TaleWorlds.CampaignSystem.Roster;
 using TaleWorlds.CampaignSystem.Settlements;
 using TaleWorlds.LinQuick;
 using static BanditMilitias.Helper;
-using static BanditMilitias.Globals;
 
 // ReSharper disable UnusedType.Global
 // ReSharper disable InconsistentNaming
@@ -78,7 +78,7 @@ namespace BanditMilitias.Patches
                 {
                     Logger.LogDebug($"{party.Party.MobileParty.Name}({party.Party.MobileParty.StringId}) is defeated in battle.");
                     if (party.Party.MobileParty.MemberRoster.TotalHealthyCount < Globals.Settings.DisperseSize)
-                        Trash(party.Party.MobileParty, RemoveHeroCondition.OnlyDead);
+                        Trash(party.Party.MobileParty);
                 }
 
                 var winnerBMs = __instance.PartiesOnSide(__instance.WinningSide)
@@ -95,48 +95,11 @@ namespace BanditMilitias.Patches
                         Logger.LogDebug($"{party.MobileParty.Name}({party.MobileParty.StringId}) has won a battle but lost its leader {party.LeaderHero.Name}.");
                         if (party.MemberRoster.Contains(party.LeaderHero.CharacterObject))
                             party.MemberRoster.RemoveTroop(party.LeaderHero.CharacterObject);
-                        party.LeaderHero.RemoveMilitiaHero();
                         RemoveMilitiaLeader(party.MobileParty);
                     }
 
                     DecreaseAvoidance(loserHeroes, bm);
                 }
-            }
-        }
-
-        // remove all heroes who are taken as prisoners
-        [HarmonyPatch(typeof(TakePrisonerAction), "ApplyInternal")]
-        public static class TakePrisonerActionApplyInternalPatch
-        {
-            public static bool Prefix(PartyBase capturerParty, Hero prisonerCharacter, bool isEventCalled)
-            {
-                if (prisonerCharacter.IsBM())
-                {
-                    Logger.LogDebug($"{prisonerCharacter.Name} is taken prisoner by {capturerParty.Name}.");
-                    if (Heroes.Contains(prisonerCharacter))
-                        prisonerCharacter.RemoveMilitiaHero();
-                    return false;
-                }
-
-                return true;
-            }
-        }
-
-        // remove all released heroes
-        [HarmonyPatch(typeof(EndCaptivityAction), "ApplyInternal")]
-        public static class EndCaptivityActionApplyInternalPatch
-        {
-            public static bool Prefix(Hero prisoner, EndCaptivityDetail detail, Hero facilitatior)
-            {
-                if (prisoner.IsBM())
-                {
-                    Logger.LogDebug($"{prisoner.Name} is released due to {detail}.");
-                    if (Heroes.Contains(prisoner))
-                        prisoner.RemoveMilitiaHero();
-                    return false;
-                }
-
-                return true;
             }
         }
 
@@ -152,7 +115,6 @@ namespace BanditMilitias.Patches
                 {
                     foreach (TroopRosterElement troop in conversationParty.MemberRoster.RemoveIf(t => t.Character.IsHero))
                     {
-                        troop.Character.HeroObject.RemoveMilitiaHero();
                         conversationParty.PrisonRoster.Add(troop);
                     }
                     Logger.LogDebug($"{conversationParty.Name}({conversationParty.StringId}) has joined to the player.");
@@ -161,6 +123,25 @@ namespace BanditMilitias.Patches
                 {
                     Logger.LogDebug($"{conversationParty.Name}({conversationParty.StringId}) has surrendered to the player.");
                 }
+            }
+        }
+
+        [HarmonyPatch(typeof(RansomOfferCampaignBehavior), "ConsiderRansomPrisoner")]
+        public static class RansomOfferCampaignBehaviorConsiderRansomPrisonerPatch
+        {
+            public static bool Prefix(RansomOfferCampaignBehavior __instance, Hero hero)
+            {
+                if (hero.Clan.Leader is null && hero.IsBM())
+                {
+                    Clan captorClanOfPrisoner = !hero.PartyBelongedToAsPrisoner.IsMobile ? hero.PartyBelongedToAsPrisoner.Settlement.OwnerClan : !hero.PartyBelongedToAsPrisoner.MobileParty.IsMilitia && !hero.PartyBelongedToAsPrisoner.MobileParty.IsGarrison && !hero.PartyBelongedToAsPrisoner.MobileParty.IsCaravan && !hero.PartyBelongedToAsPrisoner.MobileParty.IsVillager || hero.PartyBelongedToAsPrisoner.Owner == null ? hero.PartyBelongedToAsPrisoner.MobileParty.ActualClan : !hero.PartyBelongedToAsPrisoner.Owner.IsNotable ? hero.PartyBelongedToAsPrisoner.Owner.Clan : hero.PartyBelongedToAsPrisoner.Owner.CurrentSettlement.OwnerClan;
+                    if (captorClanOfPrisoner == null)
+                        return false;
+                    SetPrisonerFreeBarterable prisonerFreeBarterable = new SetPrisonerFreeBarterable(hero, captorClanOfPrisoner.Leader, hero.PartyBelongedToAsPrisoner, hero);
+                    Campaign.Current.BarterManager.ExecuteAiBarter((IFaction)captorClanOfPrisoner, (IFaction)hero.Clan, captorClanOfPrisoner.Leader, hero, (Barterable)prisonerFreeBarterable);
+                    return false;
+                }
+
+                return true;
             }
         }
         
@@ -173,7 +154,7 @@ namespace BanditMilitias.Patches
                 if (heroToBeMoved.IsBM() && targetSettlement is not null)
                 {
                     Logger.LogDebug($"Removing stray hero {heroToBeMoved.Name} before they enter settlement {targetSettlement.Name}.");
-                    heroToBeMoved.RemoveMilitiaHero();
+                    KillCharacterAction.ApplyByRemove(heroToBeMoved);
                     return false;
                 }
 

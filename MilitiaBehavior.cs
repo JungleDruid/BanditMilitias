@@ -4,6 +4,7 @@ using System.Linq;
 using Helpers;
 using Microsoft.Extensions.Logging;
 using TaleWorlds.CampaignSystem;
+using TaleWorlds.CampaignSystem.Actions;
 using TaleWorlds.CampaignSystem.Party;
 using TaleWorlds.CampaignSystem.Party.PartyComponents;
 using TaleWorlds.CampaignSystem.Roster;
@@ -67,6 +68,19 @@ namespace BanditMilitias
 
         private void DailyTick()
         {
+            foreach (Hero hero in Heroes.WhereQ(h => h.PartyBelongedTo is null && !h.IsPrisoner).ToArrayQ())
+            {
+                Logger.LogTrace($"Removing stray hero {hero.Name} from daily cleanup. HeroState: {hero.HeroState}");
+                KillCharacterAction.ApplyByRemove(hero);
+            }
+
+            foreach (Hero hero in Heroes.WhereQ(h => h.IsPrisoner && h.CurrentSettlement is not null && h.CurrentSettlement.OwnerClan != Clan.PlayerClan).ToArrayQ())
+            {
+                if (MBRandom.RandomFloat < 0.5f) continue;
+                Logger.LogTrace($"Removing imprisoned hero {hero.Name} from daily cleanup.");
+                KillCharacterAction.ApplyByRemove(hero);
+            }
+                
             if (Globals.Settings.MinLogLevel.SelectedValue <= LogLevel.Debug)
             {
                 Logger.LogDebug($"Day {CampaignTime.Now.GetDayOfYear} Report: {MobileParty.AllBanditParties.CountQ(p => !p.IsBM())} regular bandits, {AllBMs.CountQ()} bandit militias, {AllBMs.CountQ(c => c.MobileParty.LeaderHero is null)} leaderless militias");
@@ -75,22 +89,6 @@ namespace BanditMilitias
                 foreach (Hero hero in Heroes.WhereQ(hero => hero.BattleEquipment[5].IsEmpty))
                 {
                     Logger.LogWarning($"Naked hero {hero} at {hero.PartyBelongedTo?.Name.ToString() ?? hero.CurrentSettlement?.Name.ToString() ?? "unknown"}");
-                }
-
-                foreach (Hero hero in Heroes.WhereQ(h => h.IsDead))
-                {
-                    Logger.LogWarning($"{hero.Name} is dead but not removed. [{hero.DeathMark} during Day {hero.DeathDay.GetDayOfYear}]");
-                }
-
-                foreach (Hero hero in Heroes.WhereQ(h => h.PartyBelongedTo is null).ToArrayQ())
-                {
-                    Logger.LogDebug($"Removing stray hero {hero.Name} from daily cleanup. HeroState: {hero.HeroState}");
-                    hero.RemoveMilitiaHero();
-                }
-
-                foreach (Hero hero in Heroes.WhereQ(h => h.IsPrisoner))
-                {
-                    Logger.LogWarning($"{hero.Name} is a prisoner but was not removed.");
                 }
             }
         }
@@ -164,6 +162,15 @@ namespace BanditMilitias
                     BMThink(mobileParty);
                     return;
                 }
+            }
+
+            // unstuck AI if raid was interrupted
+            if (mobileParty.Ai.DoNotMakeNewDecisions && mobileParty.DefaultBehavior != AiBehavior.RaidSettlement)
+            {
+                mobileParty.Ai.SetDoNotMakeNewDecisions(false);
+                mobileParty.Ai.SetMoveModeHold();
+                BMThink(mobileParty);
+                return;
             }
 
             // near any Hideouts?
@@ -497,12 +504,6 @@ namespace BanditMilitias
             {
                 // clean up heroes from an old bug
                 Globals.Heroes.RemoveAll(h => !Hero.AllAliveHeroes.Contains(h));
-                var deadHeroes = Heroes.WhereQ(h => Hero.DeadOrDisabledHeroes.Contains(h)).ToListQ();
-                foreach (Hero hero in deadHeroes)
-                {
-                    Helper.DeadOrDisabledHeroes(Campaign.Current.CampaignObjectManager).Remove(hero);
-                }
-                Globals.Heroes.RemoveAll(h => deadHeroes.Contains(h));
             }
         }
     }

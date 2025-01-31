@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using HarmonyLib;
 using Helpers;
@@ -73,6 +74,11 @@ namespace BanditMilitias
         
         internal static readonly AccessTools.FieldRef<CampaignObjectManager, List<Hero>> DeadOrDisabledHeroes =
             AccessTools.FieldRefAccess<CampaignObjectManager, List<Hero>>("_deadOrDisabledHeroes");
+        
+        internal static readonly AccessTools.FieldRef<Hero, IHeroDeveloper> HeroDeveloperField =
+            AccessTools.FieldRefAccess<Hero, IHeroDeveloper>("_heroDeveloper");
+        
+        internal static readonly ConstructorInfo HeroDeveloperConstructor = AccessTools.Constructor(typeof(HeroDeveloper), [typeof(Hero)]);
 
         private static PartyUpgraderCampaignBehavior UpgraderCampaignBehavior;
 
@@ -226,7 +232,7 @@ namespace BanditMilitias
                 ItemRoster(bm2.Party) = inventory2;
                 bm1.Party.SetVisualAsDirty();
                 bm2.Party.SetVisualAsDirty();
-                Trash(original, RemoveHeroCondition.None);
+                Trash(original);
                 DoPowerCalculations();
             }
             catch (Exception ex)
@@ -325,8 +331,8 @@ namespace BanditMilitias
             try
             {
                 // can throw if Clan is null (doesn't happen in 3.9 apparently)
-                Trash(mobileParty, RemoveHeroCondition.None);
-                Trash(mergeTarget, RemoveHeroCondition.None);
+                Trash(mobileParty);
+                Trash(mergeTarget);
             }
             catch (Exception ex)
             {
@@ -368,16 +374,9 @@ namespace BanditMilitias
             return [ outMembers, outPrisoners ];
         }
 
-        internal enum RemoveHeroCondition
+        internal static void Trash(MobileParty mobileParty)
         {
-            None,
-            OnlyDead,
-            All
-        }
-
-        internal static void Trash(MobileParty mobileParty, RemoveHeroCondition removeHeroCondition = RemoveHeroCondition.All)
-        {
-            Logger.LogTrace($"Trashing {mobileParty.Name}({mobileParty.StringId}), removeHeroes: {removeHeroCondition}");
+            Logger.LogTrace($"Trashing {mobileParty.Name}({mobileParty.StringId})");
             try
             {
                 mobileParty.IsActive = false;
@@ -388,27 +387,6 @@ namespace BanditMilitias
                 Logger.LogError(ex, $"Error trashing {mobileParty}");
             }
 
-            if (removeHeroCondition != RemoveHeroCondition.None)
-            {
-                if (mobileParty.LeaderHero is not null &&
-                    (removeHeroCondition == RemoveHeroCondition.All ||
-                     removeHeroCondition == RemoveHeroCondition.OnlyDead && mobileParty.LeaderHero?.IsDead == true))
-                {
-                    mobileParty.LeaderHero?.RemoveMilitiaHero();
-                }
-                var heroes = mobileParty.MemberRoster
-                    .RemoveIf(t => t.Character.IsBM() && Heroes.Contains(t.Character.HeroObject) && 
-                                   (removeHeroCondition == RemoveHeroCondition.All ||
-                                    removeHeroCondition == RemoveHeroCondition.OnlyDead && t.Character.HeroObject.IsDead))
-                    .SelectQ(t => t.Character.HeroObject)
-                    .ToListQ();
-                heroes.AddRange(mobileParty.PrisonRoster
-                    .RemoveIf(t => t.Character.IsBM() && Heroes.Contains(t.Character.HeroObject))
-                    .SelectQ(t => t.Character.HeroObject));
-                foreach (var hero in heroes)
-                    hero.RemoveMilitiaHero();
-            }
-            
             mobileParty.Ai.DisableAi();
             var parties = PartiesWithoutPartyComponent(Campaign.Current.CampaignObjectManager).ToListQ();
             if (parties.Remove(mobileParty))
@@ -423,11 +401,12 @@ namespace BanditMilitias
                     GameMenu.ExitToLast();
                 Campaign.Current.TimeControlMode = CampaignTimeControlMode.Stop;
                 PartyImageMap.Clear();
-                Heroes.Clear();
                 FlushMapEvents();
                 LegacyFlushBanditMilitias();
                 RemoveBadItems(); // haven't determined if BM is causing these
                 GetCachedBMs(true).Do(bm => Trash(bm.MobileParty));
+                Heroes.Do(h => KillCharacterAction.ApplyByRemove(h));
+                Heroes.Clear();
                 InformationManager.DisplayMessage(new InformationMessage("BANDIT MILITIAS CLEARED"));
                 // should be zero
                 Logger.LogDebug($"Militias after nuke: {MobileParty.All.CountQ(m => m.IsBM())}.");
@@ -477,7 +456,7 @@ namespace BanditMilitias
                             //Debugger.Break();
                             Logger.LogTrace($">>> FLUSH BM hero prisoner {prisoner.HeroObject?.Name} at {settlement.Name}.");
                             settlement.Party.PrisonRoster.AddToCounts(prisoner, -1);
-                            prisoner.HeroObject.RemoveMilitiaHero();
+                            KillCharacterAction.ApplyByRemove(prisoner.HeroObject);
                         }
                     }
                     catch (Exception ex)
@@ -490,7 +469,7 @@ namespace BanditMilitias
             foreach (Hero hero in leftovers)
             {
                 Logger.LogTrace("Removing leftover hero " + hero);
-                hero.RemoveMilitiaHero();
+                KillCharacterAction.ApplyByRemove(hero);
             }
         }
 
@@ -803,9 +782,32 @@ namespace BanditMilitias
             return troopRoster.GetTroopRoster().WhereQ(e => e.Character.Equipment[10].Item is not null).SumQ(e => e.Number);
         }
 
+        internal static Hero CreateOrReuseHero(Settlement settlement)
+        {
+            var pool = DeadOrDisabledHeroes(Campaign.Current.CampaignObjectManager);
+            Hero hero = pool.FirstOrDefault(h => h.IsBM() && !Heroes.Contains(h));
+            if (hero is null) return CustomizedCreateHeroAtOccupation(settlement);
+            pool.Remove(hero);
+            hero.ChangeState(Hero.CharacterStates.Active);
+            hero.BornSettlement = settlement;
+            hero.Clan = settlement.OwnerClan;
+            hero.SupporterOf = settlement.OwnerClan;
+            string oldName = hero.Name.ToString();
+            NameGenerator.Current.GenerateHeroNameAndHeroFullName(hero, out TextObject firstName, out TextObject fullName, false);
+            hero.SetName(fullName, firstName);
+            hero.Init();
+            Logger.LogTrace($"{oldName} is reused as {hero}");
+            HeroDeveloperField(hero) = HeroDeveloperConstructor.Invoke([hero]) as HeroDeveloper;
+            hero.HeroDeveloper.InitializeHeroDeveloper(false, hero.Template);
+            hero.AddDeathMark();
+            hero.Initialize();
+            hero.ChangeState(Hero.CharacterStates.Active);
+            return hero;
+        }
+
         internal static Hero CreateHero(Settlement settlement)
         {
-            var hero = CustomizedCreateHeroAtOccupation(settlement);
+            var hero = CreateOrReuseHero(settlement);
             Heroes.Add(hero);
 
             EquipmentHelper.AssignHeroEquipmentFromEquipment(hero, BanditEquipment.GetRandomElement());
@@ -1069,11 +1071,7 @@ namespace BanditMilitias
                 }
             }
 
-            template = CharacterObject.CreateFrom(template);
-            if (MBRandom.RandomInt(2) == 1)
-            {
-                template.IsFemale = true;
-            }
+            template!.IsFemale = MBRandom.RandomInt(2) == 1;
             
             var specialHero = HeroCreator.CreateSpecialHero(template, settlement, settlement.OwnerClan, settlement.OwnerClan);
             var num3 = MBRandom.RandomFloat * 20f;
@@ -1082,6 +1080,7 @@ namespace BanditMilitias
             GiveGoldAction.ApplyBetweenCharacters(null, specialHero, 10000, true);
             specialHero.SupporterOf = specialHero.Clan;
             Traverse.Create(typeof(HeroCreator)).Method("AddRandomVarianceToTraits", specialHero);
+            Logger.LogTrace($"Created a new hero {specialHero}");
             return specialHero;
         }
 
