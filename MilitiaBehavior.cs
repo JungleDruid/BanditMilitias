@@ -280,18 +280,11 @@ namespace BanditMilitias
                         && MBRandom.RandomFloat < Globals.Settings.PillagingChance * 0.01f
                         && GetCachedBMs().CountQ(m => m.MobileParty.ShortTermBehavior is AiBehavior.RaidSettlement) < RaidCap)
                     {
-                        target = SettlementHelper.FindNearestVillage(s =>
-                        {
-                            // JetBrains Rider suggested this insanity
-                            if (s.Village is { VillageState: Village.VillageStates.BeingRaided or Village.VillageStates.Looted }
-                                || s.Owner is null
-                                || s.GetValue() <= 0)
-                            {
-                                return false;
-                            }
-
-                            return true;
-                        }, mobileParty);
+                        target = SettlementHelper.FindNearestVillage(
+                            s => s.Village is not { VillageState: Village.VillageStates.BeingRaided or Village.VillageStates.Looted }
+                                 && s.Owner is not null
+                                 && s.OwnerClan?.IsAtWarWith(mobileParty.ActualClan) != false
+                                 && !(s.GetValue() <= 0), mobileParty);
 
                         var BM = mobileParty.GetBM();
                         if (BM is null)
