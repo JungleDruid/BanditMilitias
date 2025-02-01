@@ -90,6 +90,16 @@ namespace BanditMilitias
                 {
                     Logger.LogWarning($"Naked hero {hero} at {hero.PartyBelongedTo?.Name.ToString() ?? hero.CurrentSettlement?.Name.ToString() ?? "unknown"}");
                 }
+
+                foreach (var c in AllBMs.WhereQ(m => m.Clan is null || m.MobileParty.ActualClan is null))
+                {
+                    Logger.LogWarning($"{c.MobileParty} does not have a clan.");
+                }
+
+                foreach (var c in AllBMs.WhereQ(m => m.MobileParty.MapFaction is null))
+                {
+                    Logger.LogWarning($"{c.MobileParty} does not have a faction.");
+                }
             }
         }
 
@@ -134,125 +144,142 @@ namespace BanditMilitias
             if (mobileParty.MapEvent is not null)
                 return;
 
-            if (mobileParty.IsBM())
+            MobileParty mergeTarget = null;
+            try
             {
-                // let another hero in the party take over the leaderless militia
-                // the game auto-replaces the leader if there's another hero in the party, just putting this here in case of some oversight
-                if (mobileParty.LeaderHero is null && mobileParty.MemberRoster.TotalHeroes > 0)
+                if (mobileParty.IsBM())
                 {
-                    var leader = mobileParty.MemberRoster.GetTroopRoster()
-                        .WhereQ(t => t.Character.IsHero)
-                        .OrderByQ(t => -t.Character.HeroObject.Power)
-                        .First().Character.HeroObject;
-                    mobileParty.ChangePartyLeader(leader);
-                    mobileParty.Ai.SetMoveModeHold();
-                    return;
+                    // let another hero in the party take over the leaderless militia
+                    // the game auto-replaces the leader if there's another hero in the party, just putting this here in case of some oversight
+                    if (mobileParty.LeaderHero is null && mobileParty.MemberRoster.TotalHeroes > 0)
+                    {
+                        var leader = mobileParty.MemberRoster.GetTroopRoster()
+                            .WhereQ(t => t.Character.IsHero)
+                            .OrderByQ(t => -t.Character.HeroObject.Power)
+                            .First().Character.HeroObject;
+                        mobileParty.ChangePartyLeader(leader);
+                        mobileParty.Ai.SetMoveModeHold();
+                        return;
+                    }
                 }
-            }
-            
-            // cancel merge if the target has changed its behavior
-            if (mobileParty.DefaultBehavior == AiBehavior.EngageParty 
-                && mobileParty.TargetParty is not null 
-                && !FactionManager.IsAtWarAgainstFaction(mobileParty.MapFaction, mobileParty.TargetParty.MapFaction))
-            {
-                if (mobileParty.TargetParty.DefaultBehavior != AiBehavior.EngageParty ||
-                    mobileParty.TargetParty.TargetParty != mobileParty)
+
+                // cancel merge if the target has changed its behavior
+                if (mobileParty.DefaultBehavior == AiBehavior.EngageParty
+                    && mobileParty.TargetParty is not null
+                    && !FactionManager.IsAtWarAgainstFaction(mobileParty.MapFaction, mobileParty.TargetParty.MapFaction))
                 {
-                    mobileParty.Ai.SetMoveModeHold();
+                    if (mobileParty.TargetParty.DefaultBehavior != AiBehavior.EngageParty ||
+                        mobileParty.TargetParty.TargetParty != mobileParty)
+                    {
+                        mobileParty.Ai.SetMoveModeHold();
+                    }
                 }
-            }
 
-            // unstuck AI if raid was interrupted
-            if (mobileParty.IsBM() && mobileParty.Ai.DoNotMakeNewDecisions && mobileParty.DefaultBehavior != AiBehavior.RaidSettlement)
-            {
-                mobileParty.Ai.SetDoNotMakeNewDecisions(false);
-                mobileParty.Ai.SetMoveModeHold();
-                BMThink(mobileParty);
-                return;
-            }
-
-            // near any Hideouts?
-            if (mobileParty.IsBM())
-            {
-                var locatableSearchData = Settlement.StartFindingLocatablesAroundPosition(mobileParty.Position2D, MinDistanceFromHideout);
-                for (Settlement settlement =
-                         Settlement.FindNextLocatable(ref locatableSearchData); settlement != null; settlement =
-                         Settlement.FindNextLocatable(ref locatableSearchData))
+                // unstuck AI if raid was interrupted
+                if (mobileParty.IsBM() && mobileParty.Ai.DoNotMakeNewDecisions && mobileParty.DefaultBehavior != AiBehavior.RaidSettlement)
                 {
-                    if (!settlement.IsHideout) continue;
+                    mobileParty.Ai.SetDoNotMakeNewDecisions(false);
+                    mobileParty.Ai.SetMoveModeHold();
                     BMThink(mobileParty);
                     return;
                 }
-            }
 
-            // BM changed too recently?
-            if (mobileParty.IsBM()
-                && CampaignTime.Now < mobileParty.GetBM().LastMergedOrSplitDate + CampaignTime.Hours(Globals.Settings.CooldownHours))
-            {
-                BMThink(mobileParty);
-                return;
-            }
-
-            List<MobileParty> nearbyBandits = [];
-            {
-                var locatableSearchData = MobileParty.StartFindingLocatablesAroundPosition(mobileParty.Position2D, FindRadius);
-                for (MobileParty party =
-                         MobileParty.FindNextLocatable(ref locatableSearchData); party != null; party =
-                         MobileParty.FindNextLocatable(ref locatableSearchData))
+                // near any Hideouts?
+                if (mobileParty.IsBM())
                 {
-                    if (party == mobileParty) continue;
-                    if (party.IsBandit && party.MapEvent is null &&
-                        mobileParty.MemberRoster.TotalManCount > Globals.Settings.MergeableSize &&
-                        mobileParty.MemberRoster.TotalManCount + mobileParty.MemberRoster.TotalManCount >= Globals.Settings.MinPartySize &&
-                        IsAvailableBanditParty(party))
+                    var locatableSearchData = Settlement.StartFindingLocatablesAroundPosition(mobileParty.Position2D, MinDistanceFromHideout);
+                    for (Settlement settlement =
+                             Settlement.FindNextLocatable(ref locatableSearchData);
+                         settlement != null;
+                         settlement =
+                             Settlement.FindNextLocatable(ref locatableSearchData))
                     {
-                        nearbyBandits.Add(party);
+                        if (!settlement.IsHideout) continue;
+                        BMThink(mobileParty);
+                        return;
                     }
                 }
-            }
-            
-            if (nearbyBandits.Count == 0)
-            {
-                BMThink(mobileParty);
-                return;
-            }
 
-            MobileParty mergeTarget = null;
-            foreach (var target in nearbyBandits.OrderByQ(m => m.Position2D.Distance(mobileParty.Position2D)))
-            {
-                var militiaTotalCount = mobileParty.MemberRoster.TotalManCount + target.MemberRoster.TotalManCount;
-                if (militiaTotalCount < Globals.Settings.MinPartySize || militiaTotalCount > CalculatedMaxPartySize)
-                    continue;
-
-                if (mobileParty.MapFaction is not null && target.MapFaction?.IsAtWarWith(mobileParty.MapFaction) == true)
-                    continue;
-
-                if (target.IsBM())
+                // BM changed too recently?
+                if (mobileParty.IsBM()
+                    && CampaignTime.Now < mobileParty.GetBM().LastMergedOrSplitDate + CampaignTime.Hours(Globals.Settings.CooldownHours))
                 {
-                    CampaignTime? targetLastChangeDate = target.GetBM().LastMergedOrSplitDate;
-                    if (CampaignTime.Now < targetLastChangeDate + CampaignTime.Hours(Globals.Settings.CooldownHours))
-                        continue;
+                    BMThink(mobileParty);
+                    return;
                 }
 
-                if (NumMountedTroops(mobileParty.MemberRoster) + NumMountedTroops(target.MemberRoster) > militiaTotalCount / 2)
-                    continue;
+                List<MobileParty> nearbyBandits = [];
+                {
+                    var locatableSearchData = MobileParty.StartFindingLocatablesAroundPosition(mobileParty.Position2D, FindRadius);
+                    for (MobileParty party =
+                             MobileParty.FindNextLocatable(ref locatableSearchData);
+                         party != null;
+                         party =
+                             MobileParty.FindNextLocatable(ref locatableSearchData))
+                    {
+                        if (party == mobileParty) continue;
+                        if (party.IsBandit && party.MapEvent is null &&
+                            mobileParty.MemberRoster.TotalManCount > Globals.Settings.MergeableSize &&
+                            mobileParty.MemberRoster.TotalManCount + mobileParty.MemberRoster.TotalManCount >= Globals.Settings.MinPartySize &&
+                            IsAvailableBanditParty(party))
+                        {
+                            nearbyBandits.Add(party);
+                        }
+                    }
+                }
 
-                mergeTarget = target;
-                break;
+                if (nearbyBandits.Count == 0)
+                {
+                    BMThink(mobileParty);
+                    return;
+                }
+
+                foreach (var target in nearbyBandits.OrderByQ(m => m.Position2D.Distance(mobileParty.Position2D)))
+                {
+                    var militiaTotalCount = mobileParty.MemberRoster.TotalManCount + target.MemberRoster.TotalManCount;
+                    if (militiaTotalCount < Globals.Settings.MinPartySize || militiaTotalCount > CalculatedMaxPartySize)
+                        continue;
+
+                    if (mobileParty.MapFaction is not null && target.MapFaction?.IsAtWarWith(mobileParty.MapFaction) == true)
+                        continue;
+
+                    if (target.IsBM())
+                    {
+                        CampaignTime? targetLastChangeDate = target.GetBM().LastMergedOrSplitDate;
+                        if (CampaignTime.Now < targetLastChangeDate + CampaignTime.Hours(Globals.Settings.CooldownHours))
+                            continue;
+                    }
+
+                    if (NumMountedTroops(mobileParty.MemberRoster) + NumMountedTroops(target.MemberRoster) > militiaTotalCount / 2)
+                        continue;
+
+                    mergeTarget = target;
+                    break;
+                }
+
+                if (mergeTarget is null)
+                {
+                    BMThink(mobileParty);
+                    return;
+                }
+
+                if (Campaign.Current.Models.MapDistanceModel.GetDistance(mergeTarget, mobileParty) > MergeDistance
+                    && mobileParty.TargetParty != mergeTarget)
+                {
+                    //Log.Debug?.Log($"{new string('>', 100)} MOVING {mobileParty.StringId,20} {mergeTarget.StringId,20}");
+                    mobileParty.Ai.SetMoveEngageParty(mergeTarget);
+                    mergeTarget.Ai.SetMoveEngageParty(mobileParty);
+                }
             }
-
-            if (mergeTarget is null)
+            catch (Exception ex)
             {
-                BMThink(mobileParty);
-                return;
-            }
-
-            if (Campaign.Current.Models.MapDistanceModel.GetDistance(mergeTarget, mobileParty) > MergeDistance
-                && mobileParty.TargetParty != mergeTarget)
-            {
-                //Log.Debug?.Log($"{new string('>', 100)} MOVING {mobileParty.StringId,20} {mergeTarget.StringId,20}");
-                mobileParty.Ai.SetMoveEngageParty(mergeTarget);
-                mergeTarget.Ai.SetMoveEngageParty(mobileParty);
+                // strange memory access violation error when some mods are installed
+                Logger.LogError(ex, $"TickPartialHourlyAiEvent: Error. Removing problematic parties. Party: ${mobileParty}, MergeTarget: ${mergeTarget}");
+                Trash(mobileParty);
+                if (mergeTarget is not null)
+                {
+                    Trash(mergeTarget);
+                }
             }
         }
 
@@ -276,6 +303,7 @@ namespace BanditMilitias
                     // Sometimes they might be stuck in a hideout
                     if (mobileParty.TargetSettlement?.IsHideout == true)
                     {
+                        // strange memory access violation error when some mods are installed
                         if (!mobileParty.IsEngaging && mobileParty.Position2D.Distance(mobileParty.TargetSettlement.Position2D) == 0f)
                         {
                             mobileParty.Ai.SetMoveModeHold();
@@ -284,7 +312,7 @@ namespace BanditMilitias
                     break;
                 case AiBehavior.PatrolAroundPoint:
                     var BM = mobileParty.GetBM();
-                    if (BM is null)
+                    if (BM is null || mobileParty.MapFaction is null)
                         return;
 
                     // PILLAGE!
@@ -294,11 +322,21 @@ namespace BanditMilitias
                         && MBRandom.RandomFloat < Globals.Settings.PillagingChance * 0.01f
                         && GetCachedBMs().CountQ(m => m.MobileParty.ShortTermBehavior is AiBehavior.RaidSettlement) < RaidCap)
                     {
-                        target = SettlementHelper.FindNearestVillage(
-                            s => s.Village is not { VillageState: Village.VillageStates.BeingRaided or Village.VillageStates.Looted }
-                                 && s.Owner is not null
-                                 && s.OwnerClan?.IsAtWarWith(mobileParty.ActualClan) != false
-                                 && !(s.GetValue() <= 0), mobileParty);
+                        try
+                        {
+                            target = SettlementHelper.FindNearestVillage(
+                                s => s.Village is not { VillageState: Village.VillageStates.BeingRaided or Village.VillageStates.Looted }
+                                     && s.Owner is not null
+                                     && s.MapFaction?.IsAtWarWith(mobileParty.MapFaction) != false
+                                     && !(s.GetValue() <= 0), mobileParty);
+                        }
+                        catch (Exception ex)
+                        {
+                            // strange memory access violation error when some mods are installed
+                            Logger.LogError(ex, $"BMThink: Error finding nearest village. Removing the problematic party. Party: {mobileParty}");
+                            Trash(mobileParty);
+                            return;
+                        }
 
                         if (BM.Avoidance.ContainsKey(target.Owner)
                             && MBRandom.RandomFloat * 100f <= BM.Avoidance[target.Owner])
