@@ -125,6 +125,10 @@ namespace BanditMilitias
         [SettingPropertyFloatingInteger("{=BMPillageChance}Pillaging Chance", 0, 100, HintText = "{=BMPillageChanceDesc}The chance of Bandit Militias AI to consider raiding a village. It triggers once per in-game hour for every bandit militia party, so a smaller value is advised.", Order = 11, RequireRestart = false)]
         [SettingPropertyGroup("{=BMAdjustments}Militia Adjustments")]
         public float PillagingChance { get; private set; } = 1;
+        
+        [SettingPropertyBool("{=BMIgnoreSizePenalty}Ignore Size Penalty", HintText = "{=BMIgnoreSizePenaltyDesc}Bandit Militias will move at normal speed regardless of its party size.", Order = 15, RequireRestart = false)]
+        [SettingPropertyGroup("{=BMAdjustments}Militia Adjustments")]
+        public bool IgnoreSizePenalty { get; private set; } = true;
 
         [SettingPropertyText("{=BMStringSetting}Bandit Militia", Order = 0, HintText = "{=BMStringSettingDesc}What to name a Bandit Militia.", RequireRestart = false)]
         public string BanditMilitiaString { get; set; } = "Bandit Militia";

@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Serilog.Events;
 using TaleWorlds.CampaignSystem;
+using TaleWorlds.CampaignSystem.Party;
 using TaleWorlds.Core;
 using TaleWorlds.Engine;
 using TaleWorlds.Library;
@@ -96,10 +97,13 @@ namespace BanditMilitias
 
         private static void OnSettingsChanged()
         {
-            foreach (ModBanditMilitiaPartyComponent bm in Helper.GetCachedBMs(true))
+            MethodInfo ResetCached = AccessTools.Method(typeof(MobileParty), "ResetCached");
+            foreach (ModBanditMilitiaPartyComponent bm in Helper.GetCachedBMs(true).ToArrayQ())
             {
                 bm.ClearCachedName();
-                bm.MobileParty?.SetCustomName(null);
+                if (bm.MobileParty is null) continue;
+                bm.MobileParty.SetCustomName(null);
+                ResetCached.Invoke(bm.MobileParty, null);
             }
 
             Helper.RefreshTrackers();

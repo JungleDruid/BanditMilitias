@@ -6,11 +6,9 @@ using System.Reflection.Emit;
 using HarmonyLib;
 using Helpers;
 using Microsoft.Extensions.Logging;
-using SandBox.GameComponents;
 using SandBox.View.Map;
 using SandBox.ViewModelCollection.Map;
 using SandBox.ViewModelCollection.Nameplate;
-using StoryMode.GameComponents;
 using TaleWorlds.CampaignSystem;
 using TaleWorlds.CampaignSystem.Actions;
 using TaleWorlds.CampaignSystem.AgentOrigins;
@@ -26,10 +24,8 @@ using TaleWorlds.CampaignSystem.Party;
 using TaleWorlds.CampaignSystem.Roster;
 using TaleWorlds.CampaignSystem.Settlements;
 using TaleWorlds.Core;
-using TaleWorlds.Library;
 using TaleWorlds.LinQuick;
 using TaleWorlds.Localization;
-using TaleWorlds.MountAndBlade;
 using static BanditMilitias.Helper;
 using static BanditMilitias.Globals;
 
@@ -45,6 +41,7 @@ namespace BanditMilitias.Patches
     {
         private static ILogger _logger;
         private static ILogger Logger => _logger ??= LogFactory.Get<MilitiaPatches>();
+        
         private static readonly AccessTools.FieldRef<MobilePartyAi, int> numberOfRecentFleeingFromAParty =
             AccessTools.FieldRefAccess<MobilePartyAi, int>("_numberOfRecentFleeingFromAParty");
 
@@ -529,6 +526,19 @@ namespace BanditMilitias.Patches
                 if (!Heroes.Contains(victim)) return;
                 Logger.LogTrace($"{victim} is killed by {killer} due to {actionDetail}");
                 Heroes.Remove(victim);
+            }
+        }
+
+        [HarmonyPatch(typeof(PartyBase), "PartySizeLimit", MethodType.Getter)]
+        public static class MobilePartyPartySizeLimitGetterPatch
+        {
+            public static void Postfix(PartyBase __instance, ref int ____cachedPartyMemberSizeLimit, ref int __result)
+            {
+                if (!Globals.Settings.IgnoreSizePenalty || !__instance.IsMobile || !__instance.MobileParty.IsBM()) return;
+                int totalManCount = __instance.MemberRoster.TotalManCount;
+                if (__result >= totalManCount) return;
+                ____cachedPartyMemberSizeLimit = totalManCount;
+                __result = totalManCount;
             }
         }
     }

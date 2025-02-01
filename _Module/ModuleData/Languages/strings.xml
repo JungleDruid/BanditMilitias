@@ -35,6 +35,8 @@
         <string id="BMCooldownDesc" text="BM won't merge or split a second time until this many hours go by."/>
 <!--        <string id="BMIdealBoost" text="Vanilla Bandit Count Boost Percent"/>-->
 <!--        <string id="BMIdealBoostDesc" text="Increase the vanilla party count by this percentage."/>-->
+        <string id="BMIgnoreSizePenalty" text="Ignore Size Penalty"/>
+        <string id="BMIgnoreSizePenaltyDesc" text="Bandit Militias will move at normal speed regardless of its party size."/>
         <string id="BMGoldReward" text="Bandit Hero Gold Reward"/>
         <string id="BMDisperse" text="Disperse Militia Size"/>
         <string id="BMDisperseDesc" text="Militias defeated with fewer than this many remaining troops will be dispersed."/>
