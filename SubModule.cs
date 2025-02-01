@@ -59,7 +59,7 @@ namespace BanditMilitias
             for (var i = 0; i < 5000; i++)
             {
                 Banners.Add((Banner)AccessTools.Method(typeof(Banner), "CreateRandomBannerInternal")
-                    .Invoke(typeof(Banner), new object[] { Rng.Next(0, int.MaxValue), -1 }));
+                    .Invoke(typeof(Banner), new object[] { MBRandom.RandomInt(0, int.MaxValue), -1 }));
             }
         }
 
@@ -96,11 +96,13 @@ namespace BanditMilitias
 
         private static void OnSettingsChanged()
         {
-            foreach (ModBanditMilitiaPartyComponent bm in AllBMs)
+            foreach (ModBanditMilitiaPartyComponent bm in Helper.GetCachedBMs(true))
             {
                 bm.ClearCachedName();
                 bm.MobileParty?.SetCustomName(null);
             }
+
+            Helper.RefreshTrackers();
         }
 
         public override void OnGameEnd(Game game)
@@ -130,10 +132,6 @@ namespace BanditMilitias
                 var original = AccessTools.Method("ServeAsSoldier.ExtortionByDesertersEvent:CreateDeserterParty");
                 if (original is not null)
                     harmony.Patch(original, postfix: new HarmonyMethod(AccessTools.Method(typeof(MiscPatches), nameof(MiscPatches.PatchSaSDeserters))));
-                var heroRelations = AccessTools.TypeByName("HeroRelations");
-                original = AccessTools.Method(heroRelations, "GetHashCodes");
-                var prefix = AccessTools.Method(typeof(MilitiaPatches.CharacterRelationsManagerGetRelation), nameof(MilitiaPatches.CharacterRelationsManagerGetRelation.Prefix));
-                harmony.Patch(original, prefix: new HarmonyMethod(prefix));
             }
             catch (Exception ex)
             {

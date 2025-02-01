@@ -64,7 +64,6 @@ namespace BanditMilitias
         internal static List<Hero> Heroes = new();
 
         // misc
-        internal static readonly Random Rng = new();
         internal static readonly Stopwatch T = new();
         internal static Settings Settings;
         internal static List<EquipmentElement> EquipmentItems = new();

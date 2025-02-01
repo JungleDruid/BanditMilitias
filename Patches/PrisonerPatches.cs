@@ -35,9 +35,9 @@ namespace BanditMilitias.Patches
                 foreach (var party in loserBMs)
                 {
                     MobileParty mobileParty = party.Party.MobileParty;
-                    if (mobileParty.LeaderHero?.IsDead == true && mobileParty.MemberRoster.TotalHealthyCount >= Globals.Settings.DisperseSize)
+                    if (mobileParty.LeaderHero?.IsDead != false && mobileParty.MemberRoster.TotalHealthyCount >= Globals.Settings.DisperseSize)
                     {
-                        Logger.LogDebug($"{mobileParty.Name}({mobileParty.StringId}) has lost a battle and its leader {mobileParty.LeaderHero.Name}, but was not dispersed.");
+                        Logger.LogDebug($"{mobileParty.Name}({mobileParty.StringId}) has lost a battle and its leader, but was not dispersed.");
                         RemoveMilitiaLeader(mobileParty);
                     }
 
@@ -53,7 +53,6 @@ namespace BanditMilitias.Patches
         [HarmonyPatch(typeof(MapEvent), "LootDefeatedParties")]
         public static class MapEventLootDefeatedPartiesPatch
         {
-            //private static IEnumerable<MapEventParty> loserBMs;
             public static void Prefix(MapEvent __instance)
             {
                 if (!__instance.HasWinner)
@@ -126,18 +125,19 @@ namespace BanditMilitias.Patches
             }
         }
 
+        // allow BM heroes barter for ransom with their own gold
         [HarmonyPatch(typeof(RansomOfferCampaignBehavior), "ConsiderRansomPrisoner")]
         public static class RansomOfferCampaignBehaviorConsiderRansomPrisonerPatch
         {
-            public static bool Prefix(RansomOfferCampaignBehavior __instance, Hero hero)
+            public static bool Prefix(Hero hero)
             {
                 if (hero.Clan.Leader is null && hero.IsBM())
                 {
                     Clan captorClanOfPrisoner = !hero.PartyBelongedToAsPrisoner.IsMobile ? hero.PartyBelongedToAsPrisoner.Settlement.OwnerClan : !hero.PartyBelongedToAsPrisoner.MobileParty.IsMilitia && !hero.PartyBelongedToAsPrisoner.MobileParty.IsGarrison && !hero.PartyBelongedToAsPrisoner.MobileParty.IsCaravan && !hero.PartyBelongedToAsPrisoner.MobileParty.IsVillager || hero.PartyBelongedToAsPrisoner.Owner == null ? hero.PartyBelongedToAsPrisoner.MobileParty.ActualClan : !hero.PartyBelongedToAsPrisoner.Owner.IsNotable ? hero.PartyBelongedToAsPrisoner.Owner.Clan : hero.PartyBelongedToAsPrisoner.Owner.CurrentSettlement.OwnerClan;
                     if (captorClanOfPrisoner == null)
                         return false;
-                    SetPrisonerFreeBarterable prisonerFreeBarterable = new SetPrisonerFreeBarterable(hero, captorClanOfPrisoner.Leader, hero.PartyBelongedToAsPrisoner, hero);
-                    Campaign.Current.BarterManager.ExecuteAiBarter((IFaction)captorClanOfPrisoner, (IFaction)hero.Clan, captorClanOfPrisoner.Leader, hero, (Barterable)prisonerFreeBarterable);
+                    var prisonerFreeBarterable = new SetPrisonerFreeBarterable(hero, captorClanOfPrisoner.Leader, hero.PartyBelongedToAsPrisoner, hero);
+                    Campaign.Current.BarterManager.ExecuteAiBarter(captorClanOfPrisoner, hero.Clan, captorClanOfPrisoner.Leader, hero, prisonerFreeBarterable);
                     return false;
                 }
 

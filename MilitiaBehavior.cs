@@ -83,7 +83,7 @@ namespace BanditMilitias
                 
             if (Globals.Settings.MinLogLevel.SelectedValue <= LogLevel.Debug)
             {
-                Logger.LogDebug($"Day {CampaignTime.Now.GetDayOfYear} Report: {MobileParty.AllBanditParties.CountQ(p => !p.IsBM())} regular bandits, {AllBMs.CountQ()} bandit militias, {AllBMs.CountQ(c => c.MobileParty.LeaderHero is null)} leaderless militias");
+                Logger.LogDebug($"Day {CampaignTime.Now.GetDayOfYear} Report: {MobileParty.AllBanditParties.CountQ(p => !p.IsBM())} regular bandits, {GetCachedBMs().CountQ()} bandit militias, {AllBMs.CountQ(c => c.MobileParty.LeaderHero is null)} leaderless militias");
                 
                 // should be fixed
                 foreach (Hero hero in Heroes.WhereQ(hero => hero.BattleEquipment[5].IsEmpty))
@@ -96,7 +96,7 @@ namespace BanditMilitias
         private static void MobilePartyDestroyed(MobileParty mobileParty, PartyBase destroyer)
         {
             // Avoidance-bomb all BMs in the area
-            int AvoidanceIncrease() => Rng.Next(15, 35);
+            int AvoidanceIncrease() => MBRandom.RandomInt(15, 35);
             if (!mobileParty.IsBM() || destroyer?.LeaderHero is null)
                 return;
 
@@ -159,13 +159,11 @@ namespace BanditMilitias
                     mobileParty.TargetParty.TargetParty != mobileParty)
                 {
                     mobileParty.Ai.SetMoveModeHold();
-                    BMThink(mobileParty);
-                    return;
                 }
             }
 
             // unstuck AI if raid was interrupted
-            if (mobileParty.Ai.DoNotMakeNewDecisions && mobileParty.DefaultBehavior != AiBehavior.RaidSettlement)
+            if (mobileParty.IsBM() && mobileParty.Ai.DoNotMakeNewDecisions && mobileParty.DefaultBehavior != AiBehavior.RaidSettlement)
             {
                 mobileParty.Ai.SetDoNotMakeNewDecisions(false);
                 mobileParty.Ai.SetMoveModeHold();
@@ -226,6 +224,9 @@ namespace BanditMilitias
                 if (militiaTotalCount < Globals.Settings.MinPartySize || militiaTotalCount > CalculatedMaxPartySize)
                     continue;
 
+                if (mobileParty.MapFaction is not null && target.MapFaction?.IsAtWarWith(mobileParty.MapFaction) == true)
+                    continue;
+
                 if (target.IsBM())
                 {
                     CampaignTime? targetLastChangeDate = target.GetBM().LastMergedOrSplitDate;
@@ -257,6 +258,8 @@ namespace BanditMilitias
 
         internal static void BMThink(MobileParty mobileParty)
         {
+            if (mobileParty?.Ai is null || mobileParty.Ai.IsDisabled || mobileParty.Ai.DoNotMakeNewDecisions || !mobileParty.IsBM())
+                return;
             Settlement target;
             switch (mobileParty.Ai.DefaultBehavior)
             {
@@ -280,6 +283,10 @@ namespace BanditMilitias
                     }
                     break;
                 case AiBehavior.PatrolAroundPoint:
+                    var BM = mobileParty.GetBM();
+                    if (BM is null)
+                        return;
+
                     // PILLAGE!
                     if (Globals.Settings.AllowPillaging
                         && mobileParty.LeaderHero is not null
@@ -293,12 +300,8 @@ namespace BanditMilitias
                                  && s.OwnerClan?.IsAtWarWith(mobileParty.ActualClan) != false
                                  && !(s.GetValue() <= 0), mobileParty);
 
-                        var BM = mobileParty.GetBM();
-                        if (BM is null)
-                            return;
-
                         if (BM.Avoidance.ContainsKey(target.Owner)
-                            && Rng.NextDouble() * 100 <= BM.Avoidance[target.Owner])
+                            && MBRandom.RandomFloat * 100f <= BM.Avoidance[target.Owner])
                         {
                             Logger.LogTrace($"{mobileParty.Name}({mobileParty.StringId}) avoided pillaging {target}");
                             break;
@@ -327,7 +330,7 @@ namespace BanditMilitias
                 }
 
                 TryGrowing(mobileParty);
-                if (Rng.NextDouble() <= Globals.Settings.TrainingChance)
+                if (MBRandom.RandomFloat <= Globals.Settings.TrainingChance * 0.01f)
                 {
                     TrainMilitia(mobileParty);
                 }
@@ -366,7 +369,7 @@ namespace BanditMilitias
                 && mobileParty.ShortTermBehavior != AiBehavior.FleeToPoint
                 && mobileParty.MapEvent is null
                 && IsAvailableBanditParty(mobileParty)
-                && Rng.NextDouble() <= Globals.Settings.GrowthChance / 100f)
+                && MBRandom.RandomFloat <= Globals.Settings.GrowthChance / 100f)
             {
                 var eligibleToGrow = mobileParty.MemberRoster.GetTroopRoster().WhereQ(rosterElement =>
                         rosterElement.Character.Tier < Globals.Settings.MaxTrainingTier
@@ -424,7 +427,7 @@ namespace BanditMilitias
                      && i < (Globals.Settings.GlobalPowerPercent - MilitiaPowerPercent) / 24f;
                      i++)
                 {
-                    if (Rng.Next(0, 101) > Globals.Settings.SpawnChance)
+                    if (MBRandom.RandomInt(0, 101) > Globals.Settings.SpawnChance)
                         continue;
 
                     Clan clan;
@@ -439,9 +442,9 @@ namespace BanditMilitias
                     if (max < min)
                         max = min;
                     var roster = TroopRoster.CreateDummyTroopRoster();
-                    var size = Convert.ToInt32(Rng.Next(min, max + 1) / 2f);
-                    var foot = Rng.Next(40, 61);
-                    var range = Rng.Next(20, Rng.Next(35, 100 - foot) + 1);
+                    var size = Convert.ToInt32(MBRandom.RandomInt(min, max + 1) / 2f);
+                    var foot = MBRandom.RandomInt(40, 61);
+                    var range = MBRandom.RandomInt(20, MBRandom.RandomInt(35, 100 - foot) + 1);
                     var horse = 100 - foot - range;
                     // DRM has no cavalry
                     if (Globals.BasicCavalry.Count == 0)

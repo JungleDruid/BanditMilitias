@@ -67,6 +67,7 @@ namespace BanditMilitias
 
         public void ForceRemoveLeader()
         {
+            if (leader is null) return;
             leader = null;
             ClearCachedName();
         }

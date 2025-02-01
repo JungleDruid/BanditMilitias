@@ -48,17 +48,6 @@ namespace BanditMilitias.Patches
         private static readonly AccessTools.FieldRef<MobilePartyAi, int> numberOfRecentFleeingFromAParty =
             AccessTools.FieldRefAccess<MobilePartyAi, int>("_numberOfRecentFleeingFromAParty");
 
-        [HarmonyPatch(typeof(MobileParty), "CalculateSpeed")]
-        public static class MobilePartyCalculateSpeed
-        {
-            public static void Postfix(MobileParty __instance, ref float __result)
-            {
-                // make them move faster towards a merge
-                if (__instance.IsBandit && __instance.TargetParty is { IsBandit: true })
-                    __result *= 1.15f;
-            }
-        }
-
         // Merge bandit parties when they are engaged with each other
         [HarmonyPatch(typeof(EncounterManager), nameof(EncounterManager.StartPartyEncounter))]
         public static class MobilePartyOnPartyInteraction
@@ -80,8 +69,7 @@ namespace BanditMilitias.Patches
             private static void Prefix(CharacterObject characterObject, ref string bannerKey)
             {
                 if (Globals.Settings.RandomBanners &&
-                    characterObject.HeroObject?.PartyBelongedTo is not null &&
-                    characterObject.HeroObject.PartyBelongedTo.IsBM())
+                    characterObject.HeroObject?.PartyBelongedTo?.IsBM() == true)
                 {
                     var component = (ModBanditMilitiaPartyComponent)characterObject.HeroObject.PartyBelongedTo.PartyComponent;
                     bannerKey = component.BannerKey;
@@ -120,6 +108,7 @@ namespace BanditMilitias.Patches
             }
         }
 
+        // prevent bandit militias from entering hideouts
         [HarmonyPatch(typeof(EnterSettlementAction), "ApplyForParty")]
         public static class EnterSettlementActionApplyForPartyPatch
         {
@@ -140,10 +129,10 @@ namespace BanditMilitias.Patches
         [HarmonyPatch(typeof(PartyNameplateVM), "RefreshDynamicProperties")]
         public static class PartyNameplateVMRefreshDynamicPropertiesPatch
         {
-            private static readonly Dictionary<MobileParty, string> Map = new();
-
-            public static void Postfix(PartyNameplateVM __instance, ref string ____fullNameBind)
+            public static void Prefix(PartyNameplateVM __instance, TextObject ____latestNameTextObject, out bool __state)
             {
+                __state = false;
+                
                 // Leader is null after a battle, crashes after-action
                 // this staged approach feels awkward but it's fast
                 if (__instance.Party?.LeaderHero is null)
@@ -151,19 +140,19 @@ namespace BanditMilitias.Patches
                     return;
                 }
 
-                if (Map.TryGetValue(__instance.Party, out var name))
-                {
-                    ____fullNameBind = name;
-                    return;
-                }
-
-                if (!__instance.Party.IsBM())
+                if (!__instance.Party.IsBandit || !__instance.Party.IsBM())
                 {
                     return;
                 }
 
-                Map.Add(__instance.Party, __instance.Party.GetBM().Name.ToString());
-                ____fullNameBind = Map[__instance.Party];
+                __state = ____latestNameTextObject != __instance.Party.LeaderHero.Name;
+            }
+            
+            public static void Postfix(PartyNameplateVM __instance, ref string ____fullNameBind, bool __state)
+            {
+                if (!__state) return;
+                
+                ____fullNameBind = __instance.Party.Name.ToString();
             }
         }
 
@@ -214,8 +203,8 @@ namespace BanditMilitias.Patches
                 TroopRoster receivingLootShare = (TroopRoster)GetPrisonerRosterReceivingLootShare.Invoke(____mapEvent, [PartyBase.MainParty]);
                 receivingLootShare.RemoveIf(t => t.Character.HeroObject?.IsDead == true);
                 ____capturedHeroes ??= receivingLootShare
-                    .RemoveIf((Predicate<TroopRosterElement>)(t => t.Character.IsHero && !t.Character.IsBM()))
-                    .ToList<TroopRosterElement>();
+                    .RemoveIf(t => t.Character.IsHero && !t.Character.IsBM())
+                    .ToList();
 
                 if (____capturedHeroes.Count == 0) return;
                 
@@ -224,6 +213,7 @@ namespace BanditMilitias.Patches
             }
         }
 
+        // conversation voice filter
         [HarmonyPatch(typeof(DefaultVoiceOverModel), nameof(DefaultVoiceOverModel.GetSoundPathForCharacter))]
         public static class DefaultVoiceOverModelGetSoundPathForCharacterPatch
         {
@@ -257,7 +247,7 @@ namespace BanditMilitias.Patches
 
                     if (targetParty.LeaderHero is not null
                         && ____mobileParty.GetBM().Avoidance.TryGetValue(targetParty.LeaderHero, out var heroAvoidance)
-                        && Rng.NextDouble() * 100 < heroAvoidance)
+                        && MBRandom.RandomFloat * 100f < heroAvoidance)
                     {
                         __result = false;
                         return;
@@ -282,10 +272,15 @@ namespace BanditMilitias.Patches
         {
             public static void Postfix(MobilePartyTrackItemVM __instance, ref ImageIdentifierVM ____factionVisualBind)
             {
-                if (__instance.TrackedParty is null)
+                if (__instance.TrackedParty is null || !__instance.TrackedParty.IsBM())
                     return;
-                if (PartyImageMap.TryGetValue(__instance.TrackedParty, out var image))
-                    ____factionVisualBind = image;
+                if (!PartyImageMap.TryGetValue(__instance.TrackedParty, out var image))
+                {
+                    image = new ImageIdentifierVM(__instance.TrackedParty.GetBM().Banner);
+                    PartyImageMap.Add(__instance.TrackedParty, image);
+                }
+                
+                ____factionVisualBind = image;
             }
         }
 
@@ -295,16 +290,6 @@ namespace BanditMilitias.Patches
         public static class AiBanditPatrollingBehaviorAiHourlyTickPatch
         {
             public static bool Prefix(MobileParty mobileParty) => !mobileParty.IsBM();
-        }
-
-        [HarmonyPatch(typeof(DefaultMobilePartyFoodConsumptionModel), "DoesPartyConsumeFood")]
-        public static class DefaultMobilePartyFoodConsumptionModelDoesPartyConsumeFoodPatch
-        {
-            public static void Postfix(MobileParty mobileParty, ref bool __result)
-            {
-                if (mobileParty.IsBM())
-                    __result = false;
-            }
         }
 
         // copied out of assembly and modified to not check against occupation
@@ -330,26 +315,6 @@ namespace BanditMilitias.Patches
                 textObject.SetTextVariable("FIRSTNAME", heroFirstName);
                 StringHelpers.SetCharacterProperties("HERO", hero.CharacterObject, textObject);
                 __result = textObject;
-            }
-        }
-
-        [HarmonyPatch(typeof(StoryModeAgentDecideKilledOrUnconsciousModel), "GetAgentStateProbability")]
-        public class StoryModeAgentDecideKilledOrUnconsciousModelGetAgentStateProbability
-        {
-            public static void Postfix(Agent effectedAgent, ref float __result)
-            {
-                if (effectedAgent.Character is CharacterObject co && Heroes.Contains(co.HeroObject))
-                    __result = 1;
-            }
-        }
-
-        [HarmonyPatch(typeof(SandboxAgentDecideKilledOrUnconsciousModel), "GetAgentStateProbability")]
-        public class SandboxAgentDecideKilledOrUnconsciousModelGetAgentStateProbability
-        {
-            public static void Postfix(Agent effectedAgent, ref float __result)
-            {
-                if (effectedAgent.Character is CharacterObject co && Heroes.Contains(co.HeroObject))
-                    __result = 1;
             }
         }
 
@@ -391,31 +356,55 @@ namespace BanditMilitias.Patches
             }
         }
 
-        // copied from 1.9 assembly since there is no BanditPartyComponent in BMs
+        // prevent crash - set HomeSettlement as settlement
         [HarmonyPatch(typeof(MobilePartyAi), "CalculateContinueChasingScore")]
         public class MobilePartyCalculateContinueChasingScore
         {
-            public static bool Prefix(MobileParty enemyParty, MobileParty ____mobileParty, ref float __result)
+            public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
             {
-                if (!____mobileParty.IsBM())
-                    return true;
-                var num = ____mobileParty.Army != null && ____mobileParty.Army.LeaderParty == ____mobileParty ? ____mobileParty.Army.TotalStrength : ____mobileParty.Party.TotalStrength;
-                var num2 = (enemyParty.Army != null && enemyParty.Army.LeaderParty == ____mobileParty ? enemyParty.Army.TotalStrength : enemyParty.Party.TotalStrength) / (num + 0.01f);
-                var num3 = 1f + 0.01f * numberOfRecentFleeingFromAParty(enemyParty.Ai);
-                var num4 = Math.Min(1f, (____mobileParty.Position2D - enemyParty.Position2D).Length / 3f);
-                var settlement = ____mobileParty.GetBM().HomeSettlement;
-                var num5 = Campaign.AverageDistanceBetweenTwoFortifications * 3f;
-                num5 = Campaign.Current.Models.MapDistanceModel.GetDistance(____mobileParty, settlement);
-                var num6 = num5 / (Campaign.AverageDistanceBetweenTwoFortifications * 3f);
-                var input = 1f + (float)Math.Pow(enemyParty.Speed / (____mobileParty.Speed - 0.25f), 3.0);
-                input = MBMath.Map(input, 0f, 5.2f, 0f, 2f);
-                var num7 = 60000f;
-                var num8 = 10000f;
-                var num9 = (enemyParty.LeaderHero != null ? enemyParty.PartyTradeGold + enemyParty.LeaderHero.Gold : enemyParty.PartyTradeGold) / (enemyParty.IsCaravan ? num8 : num7);
-                var num10 = enemyParty.LeaderHero == null ? 0.75f : enemyParty.LeaderHero.IsFactionLeader ? 1.5f : 1f;
-                var num11 = num2 * num6 * input * num3 * num4;
-                __result = MBMath.ClampFloat(num9 * num10 / (num11 + 0.001f), 0.005f, 3f);
-                return false;
+                var codeMatcher = new CodeMatcher(instructions);
+
+                // settlement = ((hideout != null) ? hideout.Settlement : null);
+                var settlement = (LocalBuilder)codeMatcher
+                    .MatchEndForward(
+                        CodeMatch.Calls(AccessTools.PropertyGetter(typeof(SettlementComponent), "Settlement")),
+                        CodeMatch.StoresLocal(),
+                        CodeMatch.Branches()
+                    )
+                    .InstructionAt(-1)
+                    .operand;
+
+                // starts after if (this._mobileParty.IsBandit)
+                int start = codeMatcher
+                    .MatchEndBackwards(
+                        CodeMatch.Calls(AccessTools.PropertyGetter(typeof(MobileParty), "IsBandit")),
+                        CodeMatch.Branches()
+                    )
+                    .ThrowIfInvalid("Could not find IsBandit")
+                    .Advance(1)
+                    .Pos;
+                
+                // ends at settlement = ((hideout != null) ? hideout.Settlement : null);
+                int end = codeMatcher
+                    .SearchForward(c => c.opcode == OpCodes.Stloc_S && c.operand == settlement)
+                    .Pos;
+                
+                // replace with settlement = GetBanditSettlement(_mobileParty);
+                return codeMatcher
+                    .Start()
+                    .Advance(start)
+                    .RemoveInstructions(end - start)
+                    .Insert([
+                        CodeInstruction.LoadArgument(0),
+                        CodeInstruction.LoadField(typeof(MobilePartyAi), "_mobileParty"),
+                        CodeInstruction.Call(typeof(MobilePartyCalculateContinueChasingScore), nameof(GetBanditSettlement)),
+                    ])
+                    .Instructions();
+            }
+
+            private static Settlement GetBanditSettlement(MobileParty mobileParty)
+            {
+                return mobileParty.GetBM()?.HomeSettlement ?? mobileParty.BanditPartyComponent?.Hideout?.Settlement;
             }
         }
 
@@ -435,43 +424,66 @@ namespace BanditMilitias.Patches
         [HarmonyPatch(typeof(PartyUpgraderCampaignBehavior), "GetPossibleUpgradeTargets")]
         public static class PartyUpgraderCampaignBehaviorGetPossibleUpgradeTargets
         {
-            public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator ilGenerator)
+            public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
             {
                 var codes = instructions.ToListQ();
-                var insertion = 0;
-                var jumpLabel = ilGenerator.DefineLabel();
+                Label jumpLabel = new();
                 var method = AccessTools.Method(typeof(PartyUpgraderCampaignBehaviorGetPossibleUpgradeTargets), nameof(IsBM));
-                for (var index = 0; index < codes.Count; index++)
+                int index;
+                for (index = codes.Count - 1; index >= 0; index--)
                 {
-                    if (codes[index].opcode == OpCodes.Ldarg_1
-                        && codes[index + 1].opcode == OpCodes.Callvirt
-                        && codes[index + 2].opcode == OpCodes.Callvirt
-                        && codes[index + 3].opcode == OpCodes.Brfalse_S)
-                        insertion = index;
+                    // float upgradeChanceForTroopUpgrade = Campaign.Current.Models.PartyTroopUpgradeModel.GetUpgradeChanceForTroopUpgrade(party, character, i);
                     if (codes[index].opcode == OpCodes.Call
                         && codes[index + 1].opcode == OpCodes.Callvirt
                         && codes[index + 2].opcode == OpCodes.Callvirt
                         && codes[index + 3].opcode == OpCodes.Ldarg_1)
-                        codes[index].labels.Add(jumpLabel);
+                    {
+                        break;
+                    }
                 }
-
+                
+                for (; index >= 0; index--)
+                {
+                    if (codes[index].labels.Count <= 0) continue;
+                    jumpLabel = codes[index].labels[0];
+                    break;
+                }
+                
+                if (jumpLabel.GetHashCode() == 0)
+                    throw new Exception("Could not find jumpLabel");
+            
                 var stack = new List<CodeInstruction>
                 {
-                    new(OpCodes.Ldarg_1),
-                    new(OpCodes.Ldloc_2),
-                    new(OpCodes.Ldloc_S, 6),
+                    new (OpCodes.Ldarg_1),
                     new(OpCodes.Call, method),
                     new(OpCodes.Brtrue_S, jumpLabel)
                 };
-
+                
+                int insertion = 0;
+                for (; index >= 0; index--)
+                {
+                    // if ((!party.Culture.IsBandit || characterObject.Culture.IsBandit) && (character.Occupation != Occupation.Bandit || partyTroopUpgradeModel.CanPartyUpgradeTroopToTarget(party, character, characterObject)))
+                    if (codes[index].opcode == OpCodes.Ldarg_1
+                        && codes[index + 1].opcode == OpCodes.Callvirt
+                        && codes[index + 2].opcode == OpCodes.Callvirt
+                        && codes[index + 3].opcode == OpCodes.Brfalse_S)
+                    {
+                        insertion = index;
+                        codes[index].MoveLabelsTo(stack[0]);
+                        break;
+                    }
+                }
+                
+                if (insertion == 0)
+                    throw new Exception("Could not find insertion point");
+            
                 codes.InsertRange(insertion, stack);
                 return codes.AsEnumerable();
             }
 
-            // ReSharper disable once UnusedParameter.Local
-            private static bool IsBM(PartyBase party, CharacterObject character, CharacterObject target)
+            private static bool IsBM(PartyBase party)
             {
-                return party.IsMobile && party.MobileParty.IsBM();
+                return party.MobileParty?.IsBM() == true;
             }
         }
 
@@ -486,77 +498,11 @@ namespace BanditMilitias.Patches
             }
         }
 
-        // rewrite of broken original in 1.0.0
-        [HarmonyPatch(typeof(Hideout), "MapFaction", MethodType.Getter)]
-        public static class HideoutMapFactionGetter
-        {
-            // ReSharper disable once RedundantAssignment
-            public static bool Prefix(Hideout __instance, ref IFaction __result)
-            {
-                __result = Clan.BanditFactions.First(c => c.Culture == __instance.Settlement.Culture);
-                return false;
-            }
-        }
-
-        // game seems to dislike me removing parties on tick 3.9
-        [HarmonyPatch(typeof(MobilePartyAi), "GetFollowBehavior")]
-        public static class MobilePartyGetFollowBehavior
-        {
-            public static bool Prefix(MobileParty followedParty, MobileParty ____mobileParty)
-            {
-                if (____mobileParty.Army == null &&
-                    followedParty is null)
-                {
-                    ____mobileParty.Ai.DisableForHours(1);
-                    ____mobileParty.Ai.RethinkAtNextHourlyTick = true;
-                    return false;
-                }
-
-                return true;
-            }
-        }
-
-        // game seems to dislike me removing parties on tick 3.9
-        [HarmonyPatch(typeof(MobileParty), "GetTotalStrengthWithFollowers")]
-        public static class MobilePartyGetTotalStrengthWithFollowers
-        {
-            public static bool Prefix(MobileParty __instance, ref float __result)
-            {
-                if (__instance.Party == null)
-                {
-                    __result = 1f;
-                    Logger.LogError($"MobileParty.GetTotalStrengthWithFollowers: {__instance.Name}({__instance.StringId}) does not have a Party.");
-                    return false;
-                }
-                
-                if (!__instance.IsBandit
-                    && __instance.Party.MobileParty.TargetParty == null
-                    && __instance.Party.MobileParty.ShortTermBehavior is AiBehavior.EngageParty)
-                {
-                    __result = __instance.Party.TotalStrength;
-                    return false;
-                }
-
-                return true;
-            }
-        }
-
         // 1.9 broke this
         [HarmonyPatch(typeof(MobileParty), "IsBanditBossParty", MethodType.Getter)]
         public class MobilePartyIsBanditBossParty
         {
             public static bool Prefix(MobileParty __instance) => !__instance.IsBM();
-        }
-
-        public class CharacterRelationsManagerGetRelation
-        {
-            public static bool Prefix(Hero hero1, Hero hero2) => hero1 is not null && hero2 is not null;
-        }
-
-        [HarmonyPatch(typeof(ChangeRelationAction), "ApplyInternal")]
-        public class ChangeRelationActionApplyInternal
-        {
-            public static Exception Finalizer() => null;
         }
 
         // bandit heroes' home settlements will be their born settlements if there is none

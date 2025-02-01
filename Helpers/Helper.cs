@@ -98,7 +98,7 @@ namespace BanditMilitias
                 return false;
             }
 
-            var roll = Rng.Next(0, 101);
+            int roll = MBRandom.RandomInt(0, 101);
             if (roll > Globals.Settings.RandomSplitChance
                 || mobileParty.Party.MemberRoster.TotalManCount > Math.Max(1, CalculatedMaxPartySize * ReductionFactor))
             {
@@ -163,7 +163,7 @@ namespace BanditMilitias
             // toss a coin (to your Witcher)
             if (rosterElement.Number == 1)
             {
-                if (Rng.Next(0, 2) == 0)
+                if (MBRandom.RandomInt(0, 2) == 0)
                 {
                     roster1.AddToCounts(rosterElement.Character, 1);
                 }
@@ -195,7 +195,7 @@ namespace BanditMilitias
                 while (party1.TotalManCount < Globals.Settings.MinPartySize)
                 {
                     // using 1, not 0 because 0 is the BM hero
-                    var troop = party1.GetCharacterAtIndex(Rng.Next(1, party1.Count));
+                    var troop = party1.GetCharacterAtIndex(MBRandom.RandomInt(0, party1.Count));
                     if (!IsRegistered(troop))
                         Meow();
                     party1.AddToCounts(troop, 1);
@@ -203,7 +203,7 @@ namespace BanditMilitias
 
                 while (party2.TotalManCount < Globals.Settings.MinPartySize)
                 {
-                    var troop = party2.GetCharacterAtIndex(Rng.Next(1, party1.Count));
+                    var troop = party2.GetCharacterAtIndex(MBRandom.RandomInt(0, party1.Count));
                     if (!IsRegistered(troop))
                         Meow();
                     party2.AddToCounts(troop, 1);
@@ -341,14 +341,6 @@ namespace BanditMilitias
 
             DoPowerCalculations();
 
-            foreach (var hero in bm.MemberRoster.GetTroopRoster().WhereQ(t => t.Character.IsHero))
-            {
-                if (hero.Character.HeroObject.PartyBelongedTo is null)
-                {
-                    Debugger.Break();
-                }
-            }
-
             return true;
         }
 
@@ -388,6 +380,7 @@ namespace BanditMilitias
             }
 
             mobileParty.Ai.DisableAi();
+            PartyImageMap.Remove(mobileParty);
             var parties = PartiesWithoutPartyComponent(Campaign.Current.CampaignObjectManager).ToListQ();
             if (parties.Remove(mobileParty))
                 PartiesWithoutPartyComponent(Campaign.Current.CampaignObjectManager) = new MBReadOnlyList<MobileParty>(parties);
@@ -645,9 +638,9 @@ namespace BanditMilitias
                             haveBow = true;
                             gear[slot] = randomElement;
                             if (randomElement.Item.ItemType is ItemObject.ItemTypeEnum.Bow)
-                                gear[3] = new EquipmentElement(Arrows.ToList()[Rng.Next(0, Arrows.Count)]);
+                                gear[3] = new EquipmentElement(Arrows.ToList()[MBRandom.RandomInt(0, Arrows.Count)]);
                             else if (randomElement.Item.ItemType == ItemObject.ItemTypeEnum.Crossbow)
-                                gear[3] = new EquipmentElement(Bolts.ToList()[Rng.Next(0, Bolts.Count)]);
+                                gear[3] = new EquipmentElement(Bolts.ToList()[MBRandom.RandomInt(0, Bolts.Count)]);
                             continue;
                         }
 
@@ -776,6 +769,30 @@ namespace BanditMilitias
                     Globals.MapMobilePartyTrackerVM.Trackers.Remove(tracker);
             }
         }
+        
+        internal static void RefreshTrackers()
+        {
+            if (!Globals.Settings.Trackers)
+            {
+                PartyImageMap.Clear();
+                var trackedBMs = Globals.MapMobilePartyTrackerVM.Trackers.WhereQ(m => m.TrackedParty.IsBM()).ToArrayQ();
+                foreach (var party in trackedBMs)
+                    Globals.MapMobilePartyTrackerVM.Trackers.Remove(party);
+            }
+            else
+            {
+                foreach (var party in Globals.MapMobilePartyTrackerVM.Trackers.WhereQ(p => p.TrackedParty.IsBM() && p.TrackedParty.MemberRoster.TotalManCount < Globals.Settings.TrackedSizeMinimum).ToArrayQ())
+                {
+                    Globals.MapMobilePartyTrackerVM.Trackers.Remove(party);
+                }
+                var trackedBMs = Globals.MapMobilePartyTrackerVM.Trackers.WhereQ(t => t.TrackedParty.IsBM()).SelectQ(t => t.TrackedParty).ToListQ();
+                foreach (var party in GetCachedBMs(true).WhereQ(p => p.MobileParty.MemberRoster.TotalManCount >= Globals.Settings.TrackedSizeMinimum))
+                {
+                    if (trackedBMs.Contains(party.MobileParty)) continue;
+                    Globals.MapMobilePartyTrackerVM.Trackers.Add(new MobilePartyTrackItemVM(party.MobileParty, MapScreen.Instance._mapCameraView.Camera, null));
+                }
+            }
+        }
 
         internal static int NumMountedTroops(TroopRoster troopRoster)
         {
@@ -864,7 +881,7 @@ namespace BanditMilitias
                     }
 
                     var element = mountedTroops.GetRandomElement();
-                    var count = Rng.Next(1, delta + 1);
+                    var count = MBRandom.RandomInt(1, delta + 1);
                     count = Math.Min(element.Number, count);
                     troopRoster.AddToCounts(element.Character, -count);
                 }
@@ -883,13 +900,8 @@ namespace BanditMilitias
             if (mobileParty.MemberRoster.Contains(leaderCharacterObject))
                 mobileParty.MemberRoster.RemoveTroop(leaderCharacterObject);
             mobileParty.MemberRoster.AddToCounts(leaderCharacterObject, 1, true);
-            // actualClan(mobileParty) = Clan.BanditFactions.First(c => c.Culture == mobileParty.HomeSettlement.Culture);
-            if (PartyImageMap.TryGetValue(mobileParty, out _))
-                PartyImageMap[mobileParty] = new ImageIdentifierVM(mobileParty.GetBM().Banner);
-            else
-                PartyImageMap.Add(mobileParty, new ImageIdentifierVM(mobileParty.GetBM().Banner));
 
-            if (Rng.Next(0, 2) == 0)
+            if (MBRandom.RandomInt(0, 2) == 0)
             {
                 var mount = Mounts.GetRandomElement();
                 mobileParty.GetBM().Leader.BattleEquipment[10] = new EquipmentElement(mount);
@@ -947,7 +959,7 @@ namespace BanditMilitias
                                 continue;
 
                             mobileParty.MemberRoster.AddToCounts(Globals.Looters.BasicTroop, -numberToUpgrade);
-                            var recruit = Globals.Recruits[culture][Rng.Next(0, Globals.Recruits[culture].Count)];
+                            var recruit = Globals.Recruits[culture][MBRandom.RandomInt(0, Globals.Recruits[culture].Count)];
                             mobileParty.MemberRoster.AddToCounts(recruit, numberToUpgrade);
                         }
                     }
@@ -968,9 +980,10 @@ namespace BanditMilitias
                         continue;
                     }
 
-                    var minNumberToUpgrade = Convert.ToInt32(Globals.Settings.UpgradeUnitsPercent / 100 * number * Rng.NextDouble());
+                    var minNumberToUpgrade = Convert.ToInt32(Globals.Settings.UpgradeUnitsPercent * 0.01f * number * MBRandom.RandomFloat);
                     minNumberToUpgrade = Math.Max(1, minNumberToUpgrade);
-                    numberToUpgrade = Convert.ToInt32(Rng.Next(minNumberToUpgrade, Convert.ToInt32((number + 1) / 2f)));
+                    numberToUpgrade = Convert.ToInt32((number + 1) / 2f);
+                    numberToUpgrade = numberToUpgrade > minNumberToUpgrade ? Convert.ToInt32(MBRandom.RandomInt(minNumberToUpgrade, numberToUpgrade)) : minNumberToUpgrade;
                     //Log.Debug?.Log($"^^^ {mobileParty.LeaderHero.Name} is training up to {numberToUpgrade} of {number} \"{troopToTrain.Character.Name}\".");
                     var xpGain = numberToUpgrade * DifficultyXpMap.ElementAt(Globals.Settings.XpGift.SelectedIndex).Value;
                     mobileParty.MemberRoster.AddXpToTroop(xpGain, troopToTrain.Character);
@@ -1010,7 +1023,7 @@ namespace BanditMilitias
             militia.InitializeMobilePartyAtPosition(rosters[0], rosters[1], MobilePartyHelper.FindReachablePointAroundPosition(position, 1));
             ConfigureMilitia(militia);
             TrainMilitia(militia);
-            Logger.LogTrace($"{militia.Name}({militia.StringId}) initialized with {militia.MemberRoster.TotalRegulars} troops and {militia.MemberRoster.TotalHeroes} heroes. [{militia.MemberRoster.GetTroopRoster()
+            Logger.LogTrace($"{militia.Name}({militia.StringId})[{militia.ActualClan}] initialized with {militia.MemberRoster.TotalRegulars} troops and {militia.MemberRoster.TotalHeroes} heroes. [{militia.MemberRoster.GetTroopRoster()
                 .WhereQ(t => t.Character.IsHero)
                 .SelectQ(t => t.Character.HeroObject.Name.ToString()).Join()}]");
         }
@@ -1045,7 +1058,7 @@ namespace BanditMilitias
                 if (mep.Party.MobileParty.GetBM().Avoidance.TryGetValue(loserHero, out _))
                     mep.Party.MobileParty.GetBM().Avoidance[loserHero] -= MilitiaBehavior.Increment;
                 else
-                    mep.Party.MobileParty.GetBM().Avoidance.Add(loserHero, Rng.Next(15, 35));
+                    mep.Party.MobileParty.GetBM().Avoidance.Add(loserHero, MBRandom.RandomInt(15, 35));
             }
         }
 
@@ -1059,7 +1072,7 @@ namespace BanditMilitias
             }
 
             var template = (CharacterObject)null;
-            var num1 = settlement.RandomIntWithSeed((uint)Rng.Next(), 1, max);
+            var num1 = settlement.RandomInt(1, max);
             foreach (var characterObject in HeroTemplates)
             {
                 var num2 = characterObject.GetTraitLevel(DefaultTraits.Frequency) * 10;
@@ -1131,6 +1144,7 @@ namespace BanditMilitias
 
             DoPowerCalculations(true);
             ReHome();
+            RefreshTrackers();
             Logger.LogTrace($"InitMap took {T.ElapsedTicks / 10000F:F3}ms to finish, there are {MobileParty.All.CountQ(m => m.IsBM())} bandit militias.");
         }
 
