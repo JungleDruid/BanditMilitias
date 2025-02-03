@@ -206,7 +206,7 @@ namespace BanditMilitias.Patches
                         CodeMatch.Calls(AccessTools.Method(typeof(TroopRosterElement), "get_Count")),
                         CodeMatch.LoadsConstant(),
                         CodeMatch.Branches()
-                    );
+                    ).ThrowIfInvalid("Could not find the target at DoCaptureHeroes");
 
                 // insert UnCaptureBMHeroes
                 CodeInstruction[] insertion =
@@ -223,12 +223,63 @@ namespace BanditMilitias.Patches
                 return codeMatcher.Instructions();
             }
 
-            private static void UnCaptureBMHeroes(List<TroopRosterElement> capturedHeroes, TroopRoster receivingLootShare)
+            internal static void UnCaptureBMHeroes(List<TroopRosterElement> capturedHeroes, TroopRoster receivingLootShare)
             {
                 foreach (TroopRosterElement element in capturedHeroes.WhereQ(t => t.Character.IsBM()).ToArrayQ())
                 {
                     receivingLootShare.AddToCounts(element.Character, element.Number, true, element.WoundedNumber, element.Xp);
                     capturedHeroes.Remove(element);
+                }
+            }
+        }
+        
+        // skip the dialogues with bandit militia heroes when freeing them from enemy parties
+        [HarmonyPatch(typeof(PlayerEncounter), "DoFreeHeroes")]
+        public static class PlayerEncounterDoFreeHeroesPatch
+        {
+            public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+            {
+                var codeMatcher = new CodeMatcher(instructions);
+
+                // if (this._capturedHeroes.Count > 0)
+                CodeMatcher target = codeMatcher
+                    .MatchStartForward(
+                        new CodeMatch(OpCodes.Ldarg_0),
+                        CodeMatch.LoadsField(AccessTools.Field(typeof(PlayerEncounter), "_freedHeroes")),
+                        new CodeMatch(OpCodes.Ldsfld),
+                        new CodeMatch(OpCodes.Dup),
+                        CodeMatch.Branches()
+                    ).ThrowIfInvalid("Could not find the target at DoFreeHeroes");
+
+                // insert UnCaptureBMHeroes
+                CodeInstruction[] insertion =
+                [
+                    CodeInstruction.LoadArgument(0),
+                    CodeInstruction.LoadField(typeof(PlayerEncounter), "_freedHeroes"),
+                    CodeInstruction.LoadArgument(0),
+                    CodeInstruction.LoadField(typeof(PlayerEncounter), "_mapEvent"),
+                    CodeInstruction.Call(typeof(PlayerEncounterDoFreeHeroesPatch), nameof(UnFreeBMHeroes))
+                ];
+                
+                target.Instruction.MoveLabelsTo(insertion[0]);
+                target.Insert(insertion);
+                
+                return codeMatcher.Instructions();
+            }
+
+            private static void UnFreeBMHeroes(List<TroopRosterElement> freedHeroes, MapEvent mapEvent)
+            {
+                if (!freedHeroes.Any(e => e.Character.IsBM())) return;
+                MethodInfo GetPrisonerRosterReceivingLootShare = AccessTools.Method(typeof(MapEvent), "GetPrisonerRosterReceivingLootShare");
+                var receivingLootShare = (TroopRoster)GetPrisonerRosterReceivingLootShare.Invoke(mapEvent, [PartyBase.MainParty]);
+                foreach (TroopRosterElement element in freedHeroes.WhereQ(t => t.Character.IsBM()).ToArrayQ())
+                {
+                    if (element.Character.HeroObject.MapFaction?.IsAtWarWith(Hero.MainHero.MapFaction) == true)
+                    {
+                        element.Character.HeroObject.PartyBelongedToAsPrisoner.PrisonRoster.RemoveTroop(element.Character);
+                        receivingLootShare.AddToCounts(element.Character, 1, true, element.WoundedNumber, element.Xp, false);
+                    }
+                    freedHeroes.Remove(element);
                 }
             }
         }
