@@ -34,7 +34,7 @@ namespace BanditMilitias
         public static readonly Harmony harmony = new("ca.gnivler.bannerlord.BanditMilitias");
         private static ILogger _logger;
         private static ILogger Logger => _logger ??= LogFactory.Get<SubModule>();
-        public static SubModule Instance {get; private set;}
+        public static SubModule Instance { get; private set; }
 
         public void OnServiceRegistration()
         {
@@ -51,6 +51,18 @@ namespace BanditMilitias
                 AccessTools.Field(typeof(Module), "_splashScreenPlayed").SetValue(Module.CurrentModule, true);
             RunManualPatches();
             harmony.PatchAll(Assembly.GetExecutingAssembly());
+            AddModuleSupports();
+        }
+
+        private static void AddModuleSupports()
+        {
+            try
+            {
+                SaveCleanerAddon.AddConditions();
+            }
+            catch (FileNotFoundException)
+            {
+            }
         }
 
         // need to cache the banners before CEK adds background colours which

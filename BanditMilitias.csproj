@@ -42,6 +42,10 @@
             <HintPath>%(Identity)</HintPath>
             <Private>False</Private>
         </Reference>
+        <Reference Include="$(BANNERLORD_GAME_DIR)\Modules\SaveCleaner\bin\Win64_Shipping_Client\*.dll">
+            <HintPath>%(Identity)</HintPath>
+            <Private>False</Private>
+        </Reference>
         <PackageReference Include="Newtonsoft.Json" Version="13.0.1" IncludeAssets="compile" />
     </ItemGroup>
 
