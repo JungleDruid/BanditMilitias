@@ -51,17 +51,21 @@ namespace BanditMilitias
                 AccessTools.Field(typeof(Module), "_splashScreenPlayed").SetValue(Module.CurrentModule, true);
             RunManualPatches();
             harmony.PatchAll(Assembly.GetExecutingAssembly());
-            AddModuleSupports();
+            AddModuleSupports(SaveCleanerSupport.Register);
         }
 
-        private static void AddModuleSupports()
+        private static void AddModuleSupports(params Action[] actions)
         {
-            try
+            foreach (Action action in actions)
             {
-                SaveCleanerAddon.AddConditions();
-            }
-            catch (FileNotFoundException)
-            {
+                try
+                {
+                    action.Invoke();
+                }
+                catch (FileNotFoundException ex)
+                {
+                    Logger.LogDebug($"Skipped module support: {ex.FileName}");
+                }
             }
         }
 

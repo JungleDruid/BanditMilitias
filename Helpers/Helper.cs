@@ -379,7 +379,7 @@ namespace BanditMilitias
             mobileParty.Ai?.DisableAi();
         }
 
-        internal static void Nuke()
+        internal static bool Nuke()
         {
             try
             {
@@ -397,10 +397,12 @@ namespace BanditMilitias
                 InformationManager.DisplayMessage(new InformationMessage("BANDIT MILITIAS CLEARED"));
                 // should be zero
                 Logger.LogDebug($"Militias after nuke: {MobileParty.All.CountQ(m => m.IsBM())}.");
+                return true;
             }
             catch (Exception ex)
             {
                 Logger.LogError(ex, "Error during nuke.");
+                return false;
             }
         }
 
