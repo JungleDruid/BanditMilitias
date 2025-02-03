@@ -391,7 +391,8 @@ namespace BanditMilitias
                 LegacyFlushBanditMilitias();
                 RemoveBadItems(); // haven't determined if BM is causing these
                 GetCachedBMs(true).Do(bm => Trash(bm.MobileParty));
-                Heroes.Do(h => KillCharacterAction.ApplyByRemove(h));
+                Hero.FindAll(h => h.IsBM()).ToArrayQ().Do(h => KillCharacterAction.ApplyByRemove(h));
+                Heroes.ToArrayQ().Do(h => KillCharacterAction.ApplyByRemove(h));
                 Heroes.Clear();
                 InformationManager.DisplayMessage(new InformationMessage("BANDIT MILITIAS CLEARED"));
                 // should be zero
@@ -804,6 +805,7 @@ namespace BanditMilitias
             NameGenerator.Current.GenerateHeroNameAndHeroFullName(hero, out TextObject firstName, out TextObject fullName, false);
             hero.SetName(fullName, firstName);
             hero.Init();
+            hero.ResetEquipments();
             Logger.LogTrace($"{oldName} is reused as {hero}");
             HeroDeveloperField(hero) = HeroDeveloperConstructor.Invoke([hero]) as HeroDeveloper;
             hero.HeroDeveloper.InitializeHeroDeveloper(false, hero.Template);

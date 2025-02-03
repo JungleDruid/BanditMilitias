@@ -68,7 +68,7 @@ namespace BanditMilitias
 
         private void DailyTick()
         {
-            foreach (Hero hero in Heroes.WhereQ(h => h.PartyBelongedTo is null && !h.IsPrisoner).ToArrayQ())
+            foreach (Hero hero in Heroes.WhereQ(h => h.PartyBelongedTo is null && h.PartyBelongedToAsPrisoner is null && !h.IsPrisoner).ToArrayQ())
             {
                 Logger.LogTrace($"Removing stray hero {hero.Name} from daily cleanup. HeroState: {hero.HeroState}");
                 KillCharacterAction.ApplyByRemove(hero);

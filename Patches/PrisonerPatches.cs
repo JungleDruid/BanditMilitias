@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using HarmonyLib;
 using Microsoft.Extensions.Logging;
@@ -5,6 +6,7 @@ using TaleWorlds.CampaignSystem;
 using TaleWorlds.CampaignSystem.Actions;
 using TaleWorlds.CampaignSystem.BarterSystem.Barterables;
 using TaleWorlds.CampaignSystem.CampaignBehaviors;
+using TaleWorlds.CampaignSystem.Encounters;
 using TaleWorlds.CampaignSystem.MapEvents;
 using TaleWorlds.CampaignSystem.Party;
 using TaleWorlds.CampaignSystem.Roster;
@@ -108,20 +110,32 @@ namespace BanditMilitias.Patches
         {
             public static void Prefix(MobileParty conversationParty, bool doBanditsJoinPlayerSide)
             {
-                if (!conversationParty.IsBM()) return;
-
-                if (doBanditsJoinPlayerSide)
+                List<MobileParty> partiesToJoinPlayerSide = [];
+                List<MobileParty> partiesToJoinEnemySide = [];
+                
+                if (PlayerEncounter.Current != null)
                 {
-                    foreach (TroopRosterElement troop in conversationParty.MemberRoster.RemoveIf(t => t.Character.IsHero))
-                    {
-                        conversationParty.PrisonRoster.Add(troop);
-                    }
-                    Logger.LogDebug($"{conversationParty.Name}({conversationParty.StringId}) has joined to the player.");
+                    PlayerEncounter.Current.FindAllNpcPartiesWhoWillJoinEvent(ref partiesToJoinPlayerSide, ref partiesToJoinEnemySide);
+                    partiesToJoinEnemySide = partiesToJoinEnemySide.WhereQ(p => p.IsBM()).ToListQ();
                 }
                 else
                 {
-                    Logger.LogDebug($"{conversationParty.Name}({conversationParty.StringId}) has surrendered to the player.");
+                    partiesToJoinEnemySide.Add(conversationParty);
                 }
+
+
+                foreach (TroopRoster roster in partiesToJoinEnemySide.SelectMany(m => new[]{ m.MemberRoster, m.PrisonRoster }))
+                {
+                    foreach (TroopRosterElement troop in roster.RemoveIf(t => t.Character.IsBM()))
+                    {
+                        TakePrisonerAction.Apply(PartyBase.MainParty, troop.Character.HeroObject);
+                        troop.Character.HeroObject.IsKnownToPlayer = true;
+                    }
+                }
+
+                Logger.LogDebug(doBanditsJoinPlayerSide
+                    ? $"{conversationParty.Name}({conversationParty.StringId}) has joined to the player."
+                    : $"{conversationParty.Name}({conversationParty.StringId}) has surrendered to the player.");
             }
         }
 
