@@ -284,6 +284,16 @@ namespace BanditMilitias.Patches
             }
         }
 
+        [HarmonyPatch(typeof(PartyBase), nameof(PartyBase.AddPrisoner))]
+        public static class PartyBaseAddPrisonerPatch
+        {
+            public static bool Prefix(PartyBase __instance, CharacterObject element)
+            {
+                if (__instance != PartyBase.MainParty || !element.IsBM()) return true;
+                return !__instance.PrisonerHeroes.Contains(element);
+            }
+        }
+
         // conversation voice filter
         [HarmonyPatch(typeof(DefaultVoiceOverModel), nameof(DefaultVoiceOverModel.GetSoundPathForCharacter))]
         public static class DefaultVoiceOverModelGetSoundPathForCharacterPatch
