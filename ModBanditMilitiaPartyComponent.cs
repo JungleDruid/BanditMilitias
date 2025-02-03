@@ -115,5 +115,13 @@ namespace BanditMilitias
         {
             cachedName = null;
         }
+
+        protected override void OnFinalize()
+        {
+            if (MobileParty is not null) PartyImageMap.Remove(MobileParty);
+            leader = null;
+            
+            base.OnFinalize();
+        }
     }
 }

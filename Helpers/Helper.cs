@@ -63,17 +63,14 @@ namespace BanditMilitias
         internal static readonly AccessTools.FieldRef<CharacterObject, bool> HiddenInEncyclopedia =
             AccessTools.FieldRefAccess<CharacterObject, bool>("<HiddenInEncylopedia>k__BackingField");
 
-        private static readonly AccessTools.FieldRef<CampaignObjectManager, MBReadOnlyList<MobileParty>> PartiesWithoutPartyComponent =
-            AccessTools.FieldRefAccess<CampaignObjectManager, MBReadOnlyList<MobileParty>>("_partiesWithoutPartyComponent");
-
         private static readonly AccessTools.FieldRef<MobileParty, Clan> actualClan =
             AccessTools.FieldRefAccess<MobileParty, Clan>("_actualClan");
 
         internal static readonly AccessTools.FieldRef<MBObjectBase, bool> IsRegistered =
             AccessTools.FieldRefAccess<MBObjectBase, bool>("<IsRegistered>k__BackingField");
         
-        internal static readonly AccessTools.FieldRef<CampaignObjectManager, List<Hero>> DeadOrDisabledHeroes =
-            AccessTools.FieldRefAccess<CampaignObjectManager, List<Hero>>("_deadOrDisabledHeroes");
+        internal static readonly AccessTools.FieldRef<Hero, bool> HasMet =
+            AccessTools.FieldRefAccess<Hero, bool>("_hasMet");
         
         internal static readonly AccessTools.FieldRef<Hero, IHeroDeveloper> HeroDeveloperField =
             AccessTools.FieldRefAccess<Hero, IHeroDeveloper>("_heroDeveloper");
@@ -379,11 +376,7 @@ namespace BanditMilitias
                 Logger.LogError(ex, $"Error trashing {mobileParty}");
             }
 
-            mobileParty.Ai.DisableAi();
-            PartyImageMap.Remove(mobileParty);
-            var parties = PartiesWithoutPartyComponent(Campaign.Current.CampaignObjectManager).ToListQ();
-            if (parties.Remove(mobileParty))
-                PartiesWithoutPartyComponent(Campaign.Current.CampaignObjectManager) = new MBReadOnlyList<MobileParty>(parties);
+            mobileParty.Ai?.DisableAi();
         }
 
         internal static void Nuke()
@@ -801,15 +794,13 @@ namespace BanditMilitias
 
         internal static Hero CreateOrReuseHero(Settlement settlement)
         {
-            var pool = DeadOrDisabledHeroes(Campaign.Current.CampaignObjectManager);
-            Hero hero = pool.FirstOrDefault(h => h.IsBM() && !Heroes.Contains(h));
+            Hero hero = Hero.DeadOrDisabledHeroes.FirstOrDefault(h => h.IsBM() && !Heroes.Contains(h));
             if (hero is null) return CustomizedCreateHeroAtOccupation(settlement);
-            pool.Remove(hero);
-            hero.ChangeState(Hero.CharacterStates.Active);
+            HasMet(hero) = false;
             hero.BornSettlement = settlement;
             hero.Clan = settlement.OwnerClan;
             hero.SupporterOf = settlement.OwnerClan;
-            string oldName = hero.Name.ToString();
+            string oldName = hero.Name?.ToString();
             NameGenerator.Current.GenerateHeroNameAndHeroFullName(hero, out TextObject firstName, out TextObject fullName, false);
             hero.SetName(fullName, firstName);
             hero.Init();
@@ -819,6 +810,7 @@ namespace BanditMilitias
             hero.AddDeathMark();
             hero.Initialize();
             hero.ChangeState(Hero.CharacterStates.Active);
+            hero.EncyclopediaText = TextObject.Empty.CopyTextObject();
             return hero;
         }
 

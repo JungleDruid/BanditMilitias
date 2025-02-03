@@ -532,7 +532,7 @@ namespace BanditMilitias
             }
             catch (Exception ex)
             {
-                InformationManager.DisplayMessage(new InformationMessage("Problem spawning BM, please open a bug report with the log.txt file (Debug setting must be on)."));
+                InformationManager.DisplayMessage(new InformationMessage("Problem spawning BM, please open a bug report with the BanditMilitias*.log file."));
                 InformationManager.DisplayMessage(new InformationMessage($"{ex.Message}"));
                 Logger.LogError(ex, "Error spawning bandit militia.");
             }

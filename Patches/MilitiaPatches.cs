@@ -194,19 +194,42 @@ namespace BanditMilitias.Patches
         [HarmonyPatch(typeof(PlayerEncounter), "DoCaptureHeroes")]
         public static class PlayerEncounterDoCaptureHeroesPatch
         {
-            public static void Prefix(ref List<TroopRosterElement> ____capturedHeroes, MapEvent ____mapEvent)
+            public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
             {
-                MethodInfo GetPrisonerRosterReceivingLootShare = AccessTools.Method(typeof(MapEvent), "GetPrisonerRosterReceivingLootShare");
-                TroopRoster receivingLootShare = (TroopRoster)GetPrisonerRosterReceivingLootShare.Invoke(____mapEvent, [PartyBase.MainParty]);
-                receivingLootShare.RemoveIf(t => t.Character.HeroObject?.IsDead == true);
-                ____capturedHeroes ??= receivingLootShare
-                    .RemoveIf(t => t.Character.IsHero && !t.Character.IsBM())
-                    .ToList();
+                var codeMatcher = new CodeMatcher(instructions);
 
-                if (____capturedHeroes.Count == 0) return;
+                // if (this._capturedHeroes.Count > 0)
+                CodeMatcher target = codeMatcher
+                    .MatchStartForward(
+                        new CodeMatch(OpCodes.Ldarg_0),
+                        CodeMatch.LoadsField(AccessTools.Field(typeof(PlayerEncounter), "_capturedHeroes")),
+                        CodeMatch.Calls(AccessTools.Method(typeof(TroopRosterElement), "get_Count")),
+                        CodeMatch.LoadsConstant(),
+                        CodeMatch.Branches()
+                    );
+
+                // insert UnCaptureBMHeroes
+                CodeInstruction[] insertion =
+                [
+                    CodeInstruction.LoadArgument(0),
+                    CodeInstruction.LoadField(typeof(PlayerEncounter), "_capturedHeroes"),
+                    CodeInstruction.LoadLocal(0),
+                    CodeInstruction.Call(typeof(PlayerEncounterDoCaptureHeroesPatch), nameof(UnCaptureBMHeroes))
+                ];
                 
-                var heroes = ____capturedHeroes.WhereQ(h => h.Character.IsBM()).ToListQ();
-                ____capturedHeroes.RemoveAll(h => heroes.Contains(h));
+                target.Instruction.MoveLabelsTo(insertion[0]);
+                target.Insert(insertion);
+                
+                return codeMatcher.Instructions();
+            }
+
+            private static void UnCaptureBMHeroes(List<TroopRosterElement> capturedHeroes, TroopRoster receivingLootShare)
+            {
+                foreach (TroopRosterElement element in capturedHeroes.WhereQ(t => t.Character.IsBM()).ToArrayQ())
+                {
+                    receivingLootShare.AddToCounts(element.Character, element.Number, true, element.WoundedNumber, element.Xp);
+                    capturedHeroes.Remove(element);
+                }
             }
         }
 
@@ -526,6 +549,7 @@ namespace BanditMilitias.Patches
                 if (!Heroes.Contains(victim)) return;
                 Logger.LogTrace($"{victim} is killed by {killer} due to {actionDetail}");
                 Heroes.Remove(victim);
+                CharacterRelationManager.Instance.RemoveHero(victim);
             }
         }
 
@@ -539,6 +563,17 @@ namespace BanditMilitias.Patches
                 if (__result >= totalManCount) return;
                 ____cachedPartyMemberSizeLimit = totalManCount;
                 __result = totalManCount;
+            }
+        }
+
+        // would've been null if there's no clan leader e.g. bandit clans
+        [HarmonyPatch(typeof(DefaultDiplomacyModel), nameof(DefaultDiplomacyModel.GetHeroesForEffectiveRelation))]
+        public static class DefaultDiplomacyModelGetHeroesForEffectiveRelationPatch
+        {
+            public static void Postfix(Hero hero1, Hero hero2, ref Hero effectiveHero1, ref Hero effectiveHero2)
+            {
+                effectiveHero1 ??= hero1;
+                effectiveHero2 ??= hero2;
             }
         }
     }
