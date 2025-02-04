@@ -81,7 +81,7 @@ namespace BanditMilitias
 
         internal static void ReHome()
         {
-            foreach (var BM in GetCachedBMs(true))
+            foreach (var BM in GetCachedBMs(true).WhereQ(p => p.Leader is not null))
                 _bornSettlement(BM.Leader) = BM.HomeSettlement;
         }
 
