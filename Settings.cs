@@ -151,6 +151,9 @@ namespace BanditMilitias
         [SettingPropertyBool("{=BMSkipConversations}Skip Conversations", HintText = "{=BMSkipConversationsDesc}Skip conversations with Bandit Militias. You won't be able to bribe them if enabled.", Order = 6, RequireRestart = false)]
         public bool SkipConversations { get; set; } = false;
         
+        [SettingPropertyBool("{=BMRemovePrisonerMessages}Remove prisoner messages", HintText = "{=BMRemovePrisonerMessagesDesc}Remove the messages of Bandit Militia Heroes being taken or released as prisoners.", Order = 6, RequireRestart = false)]
+        public bool RemovePrisonerMessages { get; set; } = true;
+        
         [SettingPropertyBool("{=BMCheckVoiceGender}Check Voice Gender", HintText = "{=BMCheckVoiceGenderDesc}Double-check if the bandit voice lines match the gender. There are some official voice lines with male voices but don't specify gender, so female bandit leaders will speak with male voices if this option is disabled.", Order = 7, RequireRestart = false)]
         public bool CheckVoiceGender { get; set; } = true;
 

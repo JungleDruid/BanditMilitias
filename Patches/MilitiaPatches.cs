@@ -29,6 +29,7 @@ using TaleWorlds.Localization;
 using static BanditMilitias.Helper;
 using static BanditMilitias.Globals;
 
+// ReSharper disable ConvertIfStatementToReturnStatement
 // ReSharper disable UnusedMember.Global
 // ReSharper disable UnusedType.Global
 // ReSharper disable UnusedMember.Local
@@ -635,6 +636,36 @@ namespace BanditMilitias.Patches
             {
                 effectiveHero1 ??= hero1;
                 effectiveHero2 ??= hero2;
+            }
+        }
+
+        // ignore the logs of militia leaders being taken as prisoners
+        [HarmonyPatch(typeof(DefaultLogsCampaignBehavior), "OnPrisonerTaken")]
+        public static class DefaultLogsCampaignBehaviorOnPrisonerTakenPatch
+        {
+            public static bool Prefix(PartyBase party, Hero hero)
+            {
+                if (Globals.Settings.RemovePrisonerMessages && party != PartyBase.MainParty && hero.IsBM())
+                {
+                    return false;
+                }
+
+                return true;
+            }
+        }
+
+        // ignore the logs of militia leaders being released as prisoners
+        [HarmonyPatch(typeof(DefaultLogsCampaignBehavior), "OnHeroPrisonerReleased")]
+        public static class DefaultLogsCampaignBehaviorOnHeroPrisonerReleasedPatch
+        {
+            public static bool Prefix(PartyBase party, Hero hero)
+            {
+                if (Globals.Settings.RemovePrisonerMessages && party != PartyBase.MainParty && hero.IsBM())
+                {
+                    return false;
+                }
+
+                return true;
             }
         }
     }

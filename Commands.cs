@@ -41,25 +41,25 @@ internal class Commands
                 _pretendingToBeHuman = !_pretendingToBeHuman;
                 InformationManager.DisplayMessage(new InformationMessage(_pretendingToBeHuman ? "You are no longer a cat." : "You are a cat.", Colors.Cyan, "Debug"));
             }
-            
+
             if (!_pretendingToBeHuman)
             {
-                if (superKey && Input.IsKeyPressed(InputKey.F9)) ShowAllPartiesOnMap();
-
                 if (Input.IsKeyPressed(InputKey.F1)) TeleportToRandomArmy();
 
                 if (Input.IsKeyPressed(InputKey.F2)) TeleportAllRegularBanditsToMe();
 
                 if (Input.IsKeyPressed(InputKey.F3)) TeleportToRandomSeasideHideout();
-
-                if (superKey && Input.IsKeyPressed(InputKey.B)) Debugger.Break();
-
-                if (superKey && Input.IsKeyPressed(InputKey.F10))
-                    MobileParty.MainParty.ItemRoster.AddToCounts(MBObjectManager.Instance.GetObject<ItemObject>("grain"), 10000);
             }
-        }
+            
+            if (superKey && Input.IsKeyPressed(InputKey.F8)) ShowAllPartiesOnMap();
 
-        if (superKey && Input.IsKeyPressed(InputKey.F11)) ToggleTestingMode();
+            if (superKey && Input.IsKeyPressed(InputKey.B)) Debugger.Break();
+
+            if (superKey && Input.IsKeyPressed(InputKey.F10))
+                MobileParty.MainParty.ItemRoster.AddToCounts(MBObjectManager.Instance.GetObject<ItemObject>("grain"), 10000);
+
+            if (superKey && Input.IsKeyPressed(InputKey.F11)) ToggleTestingMode();
+        }
 
         if (superKey && Input.IsKeyPressed(InputKey.F12)) PrintAllBanditMilitiaStats();
 

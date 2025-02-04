@@ -77,6 +77,8 @@
         <string id="BMBannersDesc" text="BMs will have unique banners, or basic bandit clan ones."/>
         <string id="BMRaidNotices" text="Village raid notices"/>
         <string id="BMRaidNoticesDesc" text="When your fiefs are raided you'll see a banner message."/>
+        <string id="BMRemovePrisonerMessages" text="Remove prisoner messages"/>
+        <string id="BMRemovePrisonerMessagesDesc" text="Remove the messages of Bandit Militia Heroes being taken or released as prisoners."/>
         <string id="BMLoggingLevel" text="Log Level"/>
         <string id="BMLoggingLevelDesc" text="The log file is at &quot;Documents/Mount and Blade II Bannerlord/Configs/ModLogs/BanditMilitia_[Time].log&quot;"/>
         <string id="BMTesting" text="Testing Mode"/>
