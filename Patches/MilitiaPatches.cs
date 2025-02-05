@@ -423,9 +423,9 @@ namespace BanditMilitias.Patches
         {
             public static bool Prefix(PartyBase owner, CharacterObject character, ref bool __result)
             {
-                if (character.UpgradeTargets is null)
+                if (character?.UpgradeTargets is null)
                 {
-                    if (owner.MemberRoster.Contains(character))
+                    if (owner?.MemberRoster?.Contains(character) == true)
                     {
                         owner.MemberRoster.RemoveTroop(character);
                     }
