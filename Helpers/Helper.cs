@@ -797,7 +797,7 @@ namespace BanditMilitias
 
         internal static Hero CreateOrReuseHero(Settlement settlement)
         {
-            Hero hero = Hero.DeadOrDisabledHeroes.FirstOrDefault(h => h.IsBM() && !Heroes.Contains(h));
+            Hero hero = Hero.DeadOrDisabledHeroes.FirstOrDefault(h => h.IsBM() && !Heroes.Contains(h) && h.CharacterObject is not null);
             if (hero is null) return CustomizedCreateHeroAtOccupation(settlement);
             HasMet(hero) = false;
             hero.BornSettlement = settlement;
