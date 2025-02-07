@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using SaveCleaner;
 using TaleWorlds.CampaignSystem;
 
@@ -11,6 +12,7 @@ internal static class SaveCleanerSupport
         addon.Essential += IsEssential;
         addon.Removable += IsRemovable;
         addon.OnWipe += OnWipe;
+        addon.AddSupportedNamespace(new Regex(@"^BanditMilitias\b"));
         addon.Register<SubModule>();
     }
 
@@ -24,7 +26,7 @@ internal static class SaveCleanerSupport
         return obj switch
         {
             Hero hero => hero.IsBM(),
-            CharacterObject character => character.IsBM(),
+            CharacterObject character => character.IsBM() && character.HeroObject == null,
             _ => false
         };
     }

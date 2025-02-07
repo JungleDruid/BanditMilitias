@@ -38,7 +38,7 @@ namespace BanditMilitias
         internal static bool IsBM(this CharacterObject characterObject) => characterObject.Occupation is Occupation.Bandit && characterObject.OriginalCharacter is not null && (characterObject.OriginalCharacter.StringId.StartsWith("bm_hero_") || characterObject.OriginalCharacter.StringId.StartsWith("lord_"));
 
         // ReSharper disable once InconsistentNaming
-        internal static bool IsBM(this Hero hero) => hero.CharacterObject.IsBM();
+        internal static bool IsBM(this Hero hero) => hero.CharacterObject?.IsBM() == true;
 
         // ReSharper disable once InconsistentNaming
         internal static ModBanditMilitiaPartyComponent GetBM(this MobileParty mobileParty)
