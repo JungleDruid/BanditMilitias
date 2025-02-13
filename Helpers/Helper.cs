@@ -803,6 +803,7 @@ namespace BanditMilitias
             hero.BornSettlement = settlement;
             hero.Clan = settlement.OwnerClan;
             hero.SupporterOf = settlement.OwnerClan;
+            hero.UpdatePlayerGender(RollFemale());
             string oldName = hero.Name?.ToString();
             NameGenerator.Current.GenerateHeroNameAndHeroFullName(hero, out TextObject firstName, out TextObject fullName, false);
             hero.SetName(fullName, firstName);
@@ -1080,7 +1081,7 @@ namespace BanditMilitias
                 }
             }
 
-            template!.IsFemale = MBRandom.RandomInt(2) == 1;
+            template!.IsFemale = RollFemale();
             
             var specialHero = HeroCreator.CreateSpecialHero(template, settlement, settlement.OwnerClan, settlement.OwnerClan);
             var num3 = MBRandom.RandomFloat * 20f;
@@ -1091,6 +1092,11 @@ namespace BanditMilitias
             Traverse.Create(typeof(HeroCreator)).Method("AddRandomVarianceToTraits", specialHero);
             Logger.LogTrace($"Created a new hero {specialHero}");
             return specialHero;
+        }
+
+        private static bool RollFemale()
+        {
+            return MBRandom.RandomInt(0, 100) < Globals.Settings.FemaleSpawnChance;
         }
 
         internal static void InitMap()

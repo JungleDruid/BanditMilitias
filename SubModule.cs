@@ -66,6 +66,10 @@ namespace BanditMilitias
                 {
                     Logger.LogDebug($"Skipped module support: {ex.FileName}");
                 }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "Failed to add module support.");
+                }
             }
         }
 

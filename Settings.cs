@@ -156,6 +156,9 @@ namespace BanditMilitias
         
         [SettingPropertyBool("{=BMCheckVoiceGender}Check Voice Gender", HintText = "{=BMCheckVoiceGenderDesc}Double-check if the bandit voice lines match the gender. There are some official voice lines with male voices but don't specify gender, so female bandit leaders will speak with male voices if this option is disabled.", Order = 7, RequireRestart = false)]
         public bool CheckVoiceGender { get; set; } = true;
+        
+        [SettingPropertyInteger("{=BMGenderSlider}Leader Gender Ratio", 0, 100, HintText = "{=BMGenderSliderDesc}Chance for Bandit Militia leaders to be female. Set to 0 for all male, or 100 for all female.", Order = 8, RequireRestart = false)]
+        public int FemaleSpawnChance { get; set; } = 50;
 
         [SettingPropertyDropdown("{=BMLoggingLevel}Log Level", HintText = "{=BMDebugDesc}Change the log level, requires restart.",
             Order = 98, RequireRestart = true)]

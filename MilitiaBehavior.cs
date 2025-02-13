@@ -468,12 +468,6 @@ namespace BanditMilitias
                     if (MBRandom.RandomInt(0, 101) > Globals.Settings.SpawnChance)
                         continue;
 
-                    Clan clan;
-                    // ROT
-                    if (settlement.OwnerClan == Wights)
-                        clan = Clan.BanditFactions.Except(new[] { Wights }).GetRandomElementInefficiently();
-                    else
-                        clan = settlement.OwnerClan;
                     var min = Convert.ToInt32(Globals.Settings.MinPartySize);
                     var max = Convert.ToInt32(CalculatedMaxPartySize);
                     // if the MinPartySize is cranked it will throw ArgumentOutOfRangeException
