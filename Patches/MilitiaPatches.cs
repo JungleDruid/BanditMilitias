@@ -52,7 +52,8 @@ namespace BanditMilitias.Patches
         {
             public static bool Prefix(PartyBase attackerParty, PartyBase defenderParty)
             {
-                if (attackerParty?.MobileParty?.IsBandit != true || defenderParty?.MobileParty?.IsBandit != true ||
+                if (PartyBase.MainParty == attackerParty || PartyBase.MainParty == defenderParty ||
+                    attackerParty?.MobileParty?.IsBandit != true || defenderParty?.MobileParty?.IsBandit != true ||
                     FactionManager.IsAtWarAgainstFaction(attackerParty.MapFaction, defenderParty.MapFaction))
                     return true;
                 TryMergeParties(attackerParty.MobileParty, defenderParty.MobileParty);
