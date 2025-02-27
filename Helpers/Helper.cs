@@ -274,71 +274,85 @@ namespace BanditMilitias
 
         internal static bool TryMergeParties(MobileParty mobileParty, MobileParty mergeTarget)
         {
-            if (mobileParty is null || mergeTarget is null || !CanMergeNow(mobileParty) || !CanMergeNow(mergeTarget))
-            {
-                return false;
-            }
-            
-            //Log.Debug?.Log($"{new string('=', 100)} MERGING {mobileParty.StringId,20} {mergeTarget.StringId,20}");
-            // create a new party merged from the two
-            var rosters = MergeRosters(mobileParty, mergeTarget);
-            Hero leaderHero = (mobileParty.LeaderHero?.Power ?? 0) >= (mergeTarget.LeaderHero?.Power ?? 0) ? mobileParty.LeaderHero : mergeTarget.LeaderHero;
-            Settlement mobilePartyHomeSettlement = mobileParty.HomeSettlement?.IsHideout ?? false ? mobileParty.HomeSettlement : null;
-            Settlement mergeTargetHomeSettlement = mergeTarget.HomeSettlement?.IsHideout ?? false ? mergeTarget.HomeSettlement : null;
-            Settlement bestSettlement = leaderHero?.HomeSettlement ?? (mobileParty.Party.TotalStrength > mergeTarget.Party.TotalStrength ? mobilePartyHomeSettlement ?? mergeTargetHomeSettlement : mergeTargetHomeSettlement ?? mobilePartyHomeSettlement);
-            if (bestSettlement is null)
-            {
-                bestSettlement = Hideouts.OrderByQ(s => s.Position2D.Distance(mobileParty.Position2D)).First();
-            }
-            
-            var bm = MobileParty.CreateParty("Bandit_Militia", new ModBanditMilitiaPartyComponent(bestSettlement, leaderHero), m => m.ActualClan = bestSettlement.OwnerClan);
-            InitMilitia(bm, rosters, mobileParty.Position2D);
-            // each BM gets the average of Avoidance values
-            var calculatedAvoidance = new Dictionary<Hero, float>();
-
-            void CalcAverageAvoidance(ModBanditMilitiaPartyComponent BM)
-            {
-                foreach (var entry in BM.Avoidance)
-                    if (!calculatedAvoidance.TryGetValue(entry.Key, out _))
-                        calculatedAvoidance.Add(entry.Key, entry.Value);
-                    else
-                    {
-                        calculatedAvoidance[entry.Key] += entry.Value;
-                        calculatedAvoidance[entry.Key] /= 2;
-                    }
-            }
-
-            if (mobileParty.PartyComponent is ModBanditMilitiaPartyComponent BM1)
-                CalcAverageAvoidance(BM1);
-
-            if (mergeTarget.PartyComponent is ModBanditMilitiaPartyComponent BM2)
-                CalcAverageAvoidance(BM2);
-
-            bm.GetBM().Avoidance = calculatedAvoidance;
-            // teleport new militias near the player
-            if (Globals.Settings.TestingMode)
-            {
-                // in case a prisoner
-                var party = Hero.MainHero.PartyBelongedTo ?? Hero.MainHero.PartyBelongedToAsPrisoner.MobileParty;
-                bm.Position2D = party.Position2D;
-            }
-
-            bm.Party.SetVisualAsDirty();
-            Logger.LogDebug($"{bm.Name}({bm.StringId}) is merged from {mobileParty.Name}({mobileParty.StringId}) and {mergeTarget.Name}({mergeTarget.StringId})");
             try
             {
-                // can throw if Clan is null (doesn't happen in 3.9 apparently)
-                Trash(mobileParty);
-                Trash(mergeTarget);
+                if (mobileParty is null || mergeTarget is null || !CanMergeNow(mobileParty) || !CanMergeNow(mergeTarget))
+                {
+                    mobileParty?.Ai?.SetMoveModeHold();
+                    mergeTarget?.Ai?.SetMoveModeHold();
+                    return false;
+                }
+                
+                //Log.Debug?.Log($"{new string('=', 100)} MERGING {mobileParty.StringId,20} {mergeTarget.StringId,20}");
+                // create a new party merged from the two
+                var rosters = MergeRosters(mobileParty, mergeTarget);
+                Hero leaderHero = (mobileParty.LeaderHero?.Power ?? 0) >= (mergeTarget.LeaderHero?.Power ?? 0) ? mobileParty.LeaderHero : mergeTarget.LeaderHero;
+                Settlement mobilePartyHomeSettlement = mobileParty.HomeSettlement?.IsHideout ?? false ? mobileParty.HomeSettlement : null;
+                Settlement mergeTargetHomeSettlement = mergeTarget.HomeSettlement?.IsHideout ?? false ? mergeTarget.HomeSettlement : null;
+                Settlement bestSettlement = leaderHero?.HomeSettlement ?? (mobileParty.Party.TotalStrength > mergeTarget.Party.TotalStrength ? mobilePartyHomeSettlement ?? mergeTargetHomeSettlement : mergeTargetHomeSettlement ?? mobilePartyHomeSettlement);
+                if (bestSettlement is null)
+                {
+                    bestSettlement = Hideouts.OrderByQ(s => s.Position2D.Distance(mobileParty.Position2D)).First();
+                }
+
+                var bm = MobileParty.CreateParty("Bandit_Militia", new ModBanditMilitiaPartyComponent(bestSettlement, leaderHero), m => m.ActualClan = bestSettlement.OwnerClan);
+                try
+                {
+                    InitMilitia(bm, rosters, mobileParty.Position2D);
+                    // each BM gets the average of Avoidance values
+                    var calculatedAvoidance = new Dictionary<Hero, float>();
+
+                    void CalcAverageAvoidance(ModBanditMilitiaPartyComponent BM)
+                    {
+                        foreach (var entry in BM.Avoidance)
+                            if (!calculatedAvoidance.TryGetValue(entry.Key, out _))
+                                calculatedAvoidance.Add(entry.Key, entry.Value);
+                            else
+                            {
+                                calculatedAvoidance[entry.Key] += entry.Value;
+                                calculatedAvoidance[entry.Key] /= 2;
+                            }
+                    }
+
+                    if (mobileParty.PartyComponent is ModBanditMilitiaPartyComponent BM1)
+                        CalcAverageAvoidance(BM1);
+
+                    if (mergeTarget.PartyComponent is ModBanditMilitiaPartyComponent BM2)
+                        CalcAverageAvoidance(BM2);
+
+                    bm.GetBM().Avoidance = calculatedAvoidance;
+                    // teleport new militias near the player
+                    if (Globals.Settings.TestingMode)
+                    {
+                        // in case a prisoner
+                        var party = Hero.MainHero.PartyBelongedTo ?? Hero.MainHero.PartyBelongedToAsPrisoner.MobileParty;
+                        bm.Position2D = party.Position2D;
+                    }
+
+                    bm.Party.SetVisualAsDirty();
+                    Logger.LogDebug($"{bm.Name}({bm.StringId}) is merged from {mobileParty.Name}({mobileParty.StringId}) and {mergeTarget.Name}({mergeTarget.StringId})");
+                    Trash(mobileParty);
+                    Trash(mergeTarget);
+
+                    DoPowerCalculations();
+
+                    return true;
+                }
+                catch (Exception)
+                {
+                    if (mobileParty?.IsActive == true) Trash(mobileParty);
+                    if (mergeTarget?.IsActive == true) Trash(mergeTarget);
+                    Trash(bm);
+                    throw;
+                }
             }
             catch (Exception ex)
             {
                 Logger.LogError(ex, $"Error merging {mobileParty} and {mergeTarget}");
+                if (mobileParty?.IsActive == true) mobileParty?.Ai?.SetMoveModeHold();
+                if (mergeTarget?.IsActive == true) mergeTarget?.Ai?.SetMoveModeHold();
+                return false;
             }
-
-            DoPowerCalculations();
-
-            return true;
         }
 
         internal static TroopRoster[] MergeRosters(MobileParty sourceParty, MobileParty targetParty)
