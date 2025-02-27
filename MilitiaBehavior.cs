@@ -91,12 +91,12 @@ namespace BanditMilitias
                     Logger.LogWarning($"Naked hero {hero} at {hero.PartyBelongedTo?.Name.ToString() ?? hero.CurrentSettlement?.Name.ToString() ?? "unknown"}");
                 }
 
-                foreach (var c in AllBMs.WhereQ(m => m.Clan is null || m.MobileParty.ActualClan is null))
+                foreach (var c in AllBMs.WhereQ(m => m.MobileParty.IsActive && (m.Clan is null || m.MobileParty.ActualClan is null)))
                 {
                     Logger.LogWarning($"{c.MobileParty} does not have a clan.");
                 }
 
-                foreach (var c in AllBMs.WhereQ(m => m.MobileParty.MapFaction is null))
+                foreach (var c in AllBMs.WhereQ(m => m.MobileParty.IsActive && m.MobileParty.MapFaction is null))
                 {
                     Logger.LogWarning($"{c.MobileParty} does not have a faction.");
                 }
